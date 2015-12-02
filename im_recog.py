@@ -8,10 +8,11 @@ import numpy as np
 # from numpy.testing import assert_array_equal
 from skimage.io import imread, imsave
 from skimage.transform import resize
+from glob import glob
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
 # import matplotlib.pyplot as plt
-# from os.path import split, splitext, join, exists
+from os.path import join, # exists, split, splitext
 # from os import mkdir
 
 import sys
@@ -25,7 +26,10 @@ def _odd(number):
 def _dim(number):
     """Raises an error if a number is greater than 2"""
     if number > 2:
-        raise TypeError("Only dimensions of 2 or fewer are allowed. "
+        raise ValueError("Only dimensions of 2 are allowed. "
+                        "Got {number}.".format(number = number))
+    elif number < 2:
+        raise ValueError("Only dimensions of 2 are allowed. "
                         "Got {number}.".format(number = number))
 
 def _check_type(ar, data_type):
@@ -33,6 +37,11 @@ def _check_type(ar, data_type):
     if not type(ar) == data_type:
         raise TypeError("Only {} types are supported. Got {}.".format(data_type,
                                                                       type(ar)))
+# Create a dict for easy look up
+image_classes = {'bedroom': 1, 'Coast': 2, 'Forest': 3, 'Highway': 4,
+                 'industrial': 5, 'Insidecity': 6, 'kitchen': 7, 'livingroom': 8,
+                 'Mountain': 9, 'Office': 10, 'OpenCountry': 11, 'store': 12,
+                 'Street':13, 'Suburb': 14, 'TallBuilding':15}
 
 def image_to_array(image):
     """Reads in image and turns values into a numpy array
@@ -70,38 +79,118 @@ def create_tiny_image(image, pixels = 16):
 
     Raises
     ------
+
     ValueError
         If the number of pixels is not an integer value
+    ValueError
+        If the number of dimensions of the image is not two.
 
     Returns
     -------
     out: ndarray
         The tiny image in a (1 x pixels^2) array
     """
-    _dim(number)
+    _dim(image.ndim)
+    _check_type(pixels, int)
 
     # Get dimensions of image and work out which is smaller
     y = image.shape[0]
     x = image.shape[1]
 
-    # width is the width of the square for the image to be cropped to
-    if y <= x:
-        width = y
+    if x == y:
+        clipped = image
     else:
-        width = x
+        # width is the width of the square for the image to be cropped to
+        width = min(x, y)
 
-    
+        # using a boolean to times how much each x or y is less than width
+        # if c is False then the x direction needs cropping
+        # if c is True then the y direction needs cropping
+        c = x < y
 
-    # Find the centroid of the array
-    centre_x = int(np.floor(x/2))
-    centre_y = int(np.floor(y/2))
+        # Find out how much either side we need to come in by.
+        x_diff = (x - width)*(not c)
+        y_diff = (y - width)*c
 
+        # Clip the image
+        if c:
+            if y_diff % 2:
+                left = np.floor(y_diff/2)
+                right = np.ceil(y_diff/2)
+            else:
+                left = y_diff/2
+                right = left
 
-    output_shape =
+            clipped = image[left:-right, :]
 
-    resize(image, output_shape,  )
+        else:
+            if x_diff % 2:
+                left = np.floor(x_diff/2)
+                right = np.ceil(x_diff/2)
+            else:
+                left = x_diff/2
+                right = left
 
-    out = zeros((1, pixels^2))
+            clipped = image[:, left:-right]
+
+    # Shape for tiny image to be
+    output_shape = (pixels, pixels)
+
+    # Resize the image
+    tiny = resize(image, output_shape)
+
+    # Creates a 1-d array of all the elements
+    out = np.ravel(tiny)
+
+    return tiny, out
+
+def create_tinys_array(folder, export = False, pixels = 16):
+    """Creates an array of tiny images from images within a specified folder.
+
+    Parameters
+    ----------
+    folder: String
+        Folder where the images to have tiny images made are stored
+    export: bool (default: False)
+        Whether a csv of the array created should be created in the folder.
+    pixels: int (default: 16)
+        The number of pixels wide that each tiny image should be.
+
+    Raises
+    ------
+
+    ValueError
+        If the number of pixels is not an integer value
+    ValueError
+        If the number of dimensions of the image is not two.
+
+    Returns
+    -------
+    out: ndarray
+        An array of all the tiny images in the specified folder.
+    """
+    # Get a list of all the jpegs in a folder
+    pattern = join(folder,'*.jpg')
+
+    list_of_files = glob(pattern)
+
+    # Create empty array for tinys to go in
+    array = np.zeros((len(list_of_files),np.square(pixels)))
+
+    # load in each jpg separately, create tiny image and add to an
+    # empty dataframe
+
+    for im in list_of_files:
+        out = image_to_array(im)
+        [tiny, row] = create_tiny_image(out, pixels)
+        array[list_of_files.index(im),:] = row
+
+    if export:
+        [c, image_class] = split(folder)
+        name = join(folder, image_class + '_tiny_image.jpg')
+        imsave(name, array)
+
+    return array
 
 
 if __name__ == '__main__':
