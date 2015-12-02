@@ -9,6 +9,7 @@ import numpy as np
 from skimage.io import imread, imsave
 from skimage.transform import resize
 from glob import glob
+from sklearn.preprocessing import normalize
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
 # import matplotlib.pyplot as plt
@@ -141,6 +142,10 @@ def create_tiny_image(image, pixels = 16):
 
     # Creates a 1-d array of all the elements
     out = np.ravel(tiny)
+
+    # Normalize the output
+
+    out = normalize(out - out.mean())
 
     return tiny, out
 
