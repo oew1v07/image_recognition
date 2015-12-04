@@ -10,11 +10,14 @@ from skimage.io import imread, imsave
 from skimage.transform import resize
 from glob import glob
 from sklearn.preprocessing import normalize
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import metrics
+from sklearn import cross_validation
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
 # import matplotlib.pyplot as plt
-from os.path import join, # exists, split, splitext
-# from os import mkdir
+from os.path import join, split #, exists, splitext
+from os import getcwd
 
 import sys
 
@@ -33,16 +36,18 @@ def _dim(number):
         raise ValueError("Only dimensions of 2 are allowed. "
                         "Got {number}.".format(number = number))
 
-def _check_type(ar, data_type):
+def _check_type(ar, data_types):
     """Raises an error if ar is not of the type given"""
-    if not type(ar) == data_type:
-        raise TypeError("Only {} types are supported. Got {}.".format(data_type,
+    if not type(ar) in data_types:
+        raise TypeError("Only {} types are supported. Got {}.".format(data_types,
                                                                       type(ar)))
 # Create a dict for easy look up
 image_classes = {'bedroom': 1, 'Coast': 2, 'Forest': 3, 'Highway': 4,
                  'industrial': 5, 'Insidecity': 6, 'kitchen': 7, 'livingroom': 8,
                  'Mountain': 9, 'Office': 10, 'OpenCountry': 11, 'store': 12,
                  'Street':13, 'Suburb': 14, 'TallBuilding':15}
+
+image_folders = list(image_classes.keys())
 
 def image_to_array(image):
     """Reads in image and turns values into a numpy array
@@ -92,7 +97,7 @@ def create_tiny_image(image, pixels = 16):
         The tiny image in a (1 x pixels^2) array
     """
     _dim(image.ndim)
-    _check_type(pixels, int)
+    _check_type(pixels, [int])
 
     # Get dimensions of image and work out which is smaller
     y = image.shape[0]
@@ -144,7 +149,6 @@ def create_tiny_image(image, pixels = 16):
     out = np.ravel(tiny)
 
     # Normalize the output
-
     out = normalize(out - out.mean())
 
     return tiny, out
@@ -173,6 +177,7 @@ def create_tinys_array(folder, export = False, pixels = 16):
     -------
     out: ndarray
         An array of all the tiny images in the specified folder.
+        Size is (n x pixels^2) where n is number of images.
     """
     # Get a list of all the jpegs in a folder
     pattern = join(folder,'*.jpg')
@@ -192,11 +197,91 @@ def create_tinys_array(folder, export = False, pixels = 16):
 
     if export:
         [c, image_class] = split(folder)
-        name = join(folder, image_class + '_tiny_image.jpg')
+        name = join(c, image_class + '_tiny_image.jpg')
         imsave(name, array)
 
     return array
 
+def training_tiny_image(export = False, pixels = 16):
+    paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
+
+    length = len(paths)
+
+    #Using the fact that there are 100 in each folder
+    tiny_images = np.zeros((length*100, np.square(pixels)))
+    targets = np.zeros((length*100,1))
+
+    start = 0
+    chunk = 100
+    for i in paths:
+        [c,d] = split(i)
+        class_num = image_classes[d]
+        #no minus 1 as numpy arrays are exclusive at end.
+        end_point = start + chunk
+        array = create_tinys_array(i, export, pixels)
+        # Put array into the big array for use in sklearn
+        tiny_images[start:end_point,:] = array
+        targets[start:end_point,:] = class_num*np.ones((100,1))
+        start = start + chunk
+    return tiny_images, targets
+
+def KNN(X, y, n_neighbors = 5):
+    """Fits a K nearest neighbour classifier to the given data.
+
+    Parameters
+    ----------
+    X: ndarray
+        The data to fit the classifier to.
+    y: ndarray
+        The targets to try and predict.
+    n_neighbors: int
+        Number of neighbours each point should be compared to. Incorrect
+        spelling for the sklearn method - so I don't get confused.
+
+    Returns
+    -------
+    neigh: KNeighborsClassifier
+        The classifier object to then do more predictions elsewhere
+    acc: float
+        The accuracy of the classifier on the training data
+
+    """
+    neigh = KNeighborsClassifier(n_neighbors)
+    neigh.fit(X,y)
+
+    # gets mean accuracy on the data
+    acc = neigh.score(X, y)
+    return neigh, acc
+
+def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
+    tr_acc = []
+    tst_acc = []
+
+    for i in range(run_num):
+        [X_train, X_test, y_train, y_test] = cross_validation.train_test_split(X, y, test_size=test_size)
+
+        [neigh, acc_tr] = KNN(X_train, y_train, n_neighbors)
+
+        # Put training accuracy into dataframe
+        tr_acc.append(acc_tr)
+
+        pred = neigh.predict(X_test)
+
+        print(pred[:10])
+
+        #print(metrics.classification_report(y_test, pred))
+
+        # Calculate the test accuracy
+        acc_tst = neigh.score(X_test, y_test)
+        tst_acc.append(acc_tst)
+
+    return tr_acc, tst_acc
+
+def run1(test_folder, pixels = 16, export = False):
+    X, y = training_tiny_image(export, pixels)
+    tr_acc, tst_acc = split_test_knn(X, np.ravel(y))
+
+    return tr_acc, tst_acc
 
 if __name__ == '__main__':
     # if the commange line has three arguments then the images have been
