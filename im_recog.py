@@ -13,7 +13,7 @@ from glob import glob
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import metrics
-from sklearn import cross_validation
+from sklearn.cross_validation import train_test_split
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
 import matplotlib.pyplot as plt
@@ -300,7 +300,7 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
     tst_acc = []
 
     for i in range(run_num):
-        [X_train, X_test, y_train, y_test] = cross_validation.train_test_split(X, y, test_size=test_size)
+        [X_train, X_test, y_train, y_test] = train_test_split(X, y, test_size=test_size)
 
         [neigh, acc_tr] = KNN(X_train, y_train, n_neighbors)
 
@@ -345,11 +345,6 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     shp = patches.shape
     # Resize the array so that each row is one dense patch.
     out = np.reshape(patches, (shp[0]*shp[1], shp[2]*shp[3]))
-
-    # For each row do mean centering and normalization
-    m = out.mean(axis = 1)
-    out = (np.transpose(out) - m).transpose()
-    out = normalize(out, axis = 1)
 
     return out
 
@@ -439,15 +434,27 @@ def sample_patches(sample_num = 500):
         #Sample from this list
         sample = patch[sample_index,:]
 
-        list_of_samples.append(sample)
+        # Only normalize and mean centre once I have the sample!
+        m = sample.mean(axis = 1)
+        out = (np.transpose(sample) - m).transpose()
+        out = normalize(out, axis = 1)
+
+        list_of_samples.append(out)
         list_of_targets.append(target)
 
+    # DO NOT PUT TOGETHER!!!
+    # X = np.vstack(list_of_samples)
+    # y = np.vstack(list_of_targets)
+    return list_of_samples, list_of_targets
 
-    X = np.vstack(list_of_samples)
-    y = np.vstack(list_of_targets)
-    return X, y
+def find_clusters(list_of_samples, list_of_targets, cluster_num = 15, test_size = 0.4):
+    list_of_clusters = []
+    # Split into test and training datasets
+    for i in range(len(list_of_samples)):
+        X = list_of_samples[i]
+        y = list_of_targets[i]
+        [X_train, X_test, y_train, y_test] = train_test_split(X, y, test_size=test_size)
 
-def find_clusters(X, y, cluster_num = 15)
 
 def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
     # Training the algorithm
