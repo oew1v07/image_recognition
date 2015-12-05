@@ -8,6 +8,7 @@ import numpy as np
 # from numpy.testing import assert_array_equal
 from skimage.io import imread, imsave
 from skimage.transform import resize
+from skimage.util import view_as_windows
 from glob import glob
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import KNeighborsClassifier
@@ -15,17 +16,12 @@ from sklearn import metrics
 from sklearn import cross_validation
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from os.path import join, split #, exists, splitext
 from os import getcwd
-
 import sys
+from traceback import print_exc
 
-def _odd(number):
-    """Raises an error if a number isn't odd"""
-    if number % 2 == 0:
-        raise TypeError("Only odd sizes are supported. "
-                        "Got {number}.".format(number = number))
 
 def _dim(number):
     """Raises an error if a number is greater than 2"""
@@ -42,12 +38,17 @@ def _check_type(ar, data_types):
         raise TypeError("Only {} types are supported. Got {}.".format(data_types,
                                                                       type(ar)))
 # Create a dict for easy look up
-image_classes = {'bedroom': 1, 'Coast': 2, 'Forest': 3, 'Highway': 4,
-                 'industrial': 5, 'Insidecity': 6, 'kitchen': 7, 'livingroom': 8,
-                 'Mountain': 9, 'Office': 10, 'OpenCountry': 11, 'store': 12,
-                 'Street':13, 'Suburb': 14, 'TallBuilding':15}
+image_classes_names = {'bedroom': 1, 'Coast': 2, 'Forest': 3, 'Highway': 4,
+                       'industrial': 5, 'Insidecity': 6, 'kitchen': 7, 'livingroom': 8,
+                       'Mountain': 9, 'Office': 10, 'OpenCountry': 11, 'store': 12,
+                       'Street':13, 'Suburb': 14, 'TallBuilding':15}
 
-image_folders = list(image_classes.keys())
+image_classes_int = {}
+
+for k, v in image_classes_names.items():
+    image_classes_int[v] = k
+
+image_folders = list(image_classes_names.keys())
 
 def image_to_array(image):
     """Reads in image and turns values into a numpy array
@@ -200,7 +201,47 @@ def create_tinys_array(folder, export = False, pixels = 16):
         name = join(c, image_class + '_tiny_image.jpg')
         imsave(name, array)
 
-    return array
+    return array, list_of_files
+
+def write_output(glob_list, y, run_no):
+    """Writes the output in the format specified
+
+    Parameters
+    ----------
+    glob_list: list
+        The glob list should be in the full path format.
+    y: ndarray
+        The predicted classes in integer format.
+
+    Raises
+    ------
+    ValueError
+        If the length of glob list is not the same as y.
+    """
+    if len(glob_list) != len(y):
+        raise ValueError("List of globs and y are not the same length")
+
+    else:
+
+        list_of_jpgs = []
+        classes = []
+
+        for i in glob_list:
+            [path, jpg] = split(i)
+            list_of_jpgs.append(jpg)
+
+        for i in y:
+            im_class = image_classes_int[i]
+            classes.append(im_class)
+
+        out_path = join(path, 'run{}.txt'.format(run_no))
+
+        with open(out_path, 'w') as t:
+            for i in range(len(glob_list)):
+                line = list_of_jpgs[i] + " " + classes[i].lower()
+                t.write(line)
+                t.write("\n")
+    return out_path
 
 def training_tiny_image(export = False, pixels = 16):
     paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
@@ -215,10 +256,10 @@ def training_tiny_image(export = False, pixels = 16):
     chunk = 100
     for i in paths:
         [c,d] = split(i)
-        class_num = image_classes[d]
+        class_num = image_classes_names[d]
         #no minus 1 as numpy arrays are exclusive at end.
         end_point = start + chunk
-        array = create_tinys_array(i, export, pixels)
+        array, list_of_files = create_tinys_array(i, export, pixels)
         # Put array into the big array for use in sklearn
         tiny_images[start:end_point,:] = array
         targets[start:end_point,:] = class_num*np.ones((100,1))
@@ -246,6 +287,7 @@ def KNN(X, y, n_neighbors = 5):
         The accuracy of the classifier on the training data
 
     """
+    y = y.ravel()
     neigh = KNeighborsClassifier(n_neighbors)
     neigh.fit(X,y)
 
@@ -267,21 +309,188 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
 
         pred = neigh.predict(X_test)
 
-        print(pred[:10])
-
         #print(metrics.classification_report(y_test, pred))
 
         # Calculate the test accuracy
         acc_tst = neigh.score(X_test, y_test)
         tst_acc.append(acc_tst)
 
-    return tr_acc, tst_acc
+    return tr_acc, tst_acc, neigh
 
-def run1(test_folder, pixels = 16, export = False):
+def get_dense_patches(image, patch_size = 8, sample_rate = 4):
+    """Gets dense patches of pixels from an image.
+
+    This uses the view_as_windows function from scikit-image.
+
+    Parameters
+    ----------
+    image: ndarray
+        Image to find dense patches within.
+    patch_size: int (default: 8)
+        Size of each patch. 8 x 8 patches are recommended.
+    sample_rate: int (default: 4)
+        How many pixels apart each patch should be chosen in both x and y
+        directions.
+
+    Returns
+    -------
+    out: ndarray
+        An array of which the rows make up a ravel of each dense patch.
+    """
+
+    window_shape = (patch_size, patch_size)
+    patches = view_as_windows(image, window_shape = window_shape,
+                                    step = sample_rate)
+
+    shp = patches.shape
+    # Resize the array so that each row is one dense patch.
+    out = np.reshape(patches, (shp[0]*shp[1], shp[2]*shp[3]))
+
+    return out
+
+def patches_folder(folder, patch_size = 8, sample_rate = 4, export = False):
+    """Creates one array of dense patches for every image in a folder.
+
+    Parameters
+    ----------
+    folder: String
+        folder with all jpgs
+    patch_size: int (default: 8)
+        Size of each patch. 8 x 8 patches are recommended.
+    sample_rate: int (default: 4)
+        How many pixels apart each patch should be chosen in both x and y
+        directions.
+    export: bool (default: False)
+        Whether the resulting array should be saved as a jpg
+
+    Returns
+    -------
+    out: ndarray
+        an array of all dense patches for the folder
+    """
+
+    # Get a list of all the jpegs in a folder
+    pattern = join(folder,'*.jpg')
+
+    list_of_files = glob(pattern)
+
+    # Create empty array for tinys to go in
+    res = []
+
+    # load in each jpg separately, create dense patch array and add to an
+    # empty list
+
+    for im in list_of_files:
+        image = image_to_array(im)
+        patches = get_dense_patches(image, patch_size, sample_rate)
+        res.append(patches)
+
+    # join all the arrays in the list using np.vstack
+    patch_array = np.vstack(res)
+
+    try:
+        if export:
+            [c, image_class] = split(folder)
+            name = join(c, image_class + '_patches_image.npy')
+            np.save(name, patch_array)
+    except Exception:
+        print("I couldn't save to an npy file")
+        print_exc()
+        return patch_array
+
+    return patch_array
+
+def create_folder_npy(patch_size = 8, sample_rate = 4, export = False):
+    """Creates an npy folder for each folder within the given folder"""
+
+    paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
+
+    list_of_patches = []
+
+    for path in paths:
+        patch_array = patches_folder(path, patch_size, sample_rate, export)
+        list_of_patches.append(patch_array)
+
+    return paths, list_of_patches
+
+def sample_patches(sample_num = 500):
+    paths, list_of_patches = create_folder_npy(patch_size = 8, sample_rate = 4, export = False)
+
+    list_of_samples = []
+    list_of_targets = []
+    for i in paths:
+        [c,d] = split(i)
+        class_num = image_classes_names[d]
+        # Create an array of targets for each sample
+        target = np.ones((sample_num,1))
+        target = target*class_num
+
+        # Get the corresponding patch from list of patches
+        patch = list_of_patches[paths.index(i)]
+
+        # Create an array of 500 random integers between 0 and len(patch)
+        sample_index = np.random.randint(len(patch),size = sample_num)
+
+        #Sample from this list
+        sample = patch[sample_index,:]
+        
+        list_of_samples.append(sample)
+        list_of_targets.append(target)
+
+
+    X = np.vstack(list_of_samples)
+    y = np.vstack(list_of_targets)
+    return X, y
+
+
+
+def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
+    # Training the algorithm
     X, y = training_tiny_image(export, pixels)
-    tr_acc, tst_acc = split_test_knn(X, np.ravel(y))
 
-    return tr_acc, tst_acc
+    ma_trs = []
+    ma_tsts = []
+
+    # Doing a cross validation
+    for i in n_neighbors:
+        tr_acc, tst_acc, neigh = split_test_knn(X, np.ravel(y), n_neighbors = i,
+                                                run_num = run_num)
+        # find mse for training and test data
+        ma_tr = np.mean(tr_acc)
+        ma_tst = np.mean(tst_acc)
+
+        ma_trs.append(ma_tr)
+        ma_tsts.append(ma_tst)
+
+    # Calculating the optimum k where optimum is the max test accuracy
+    opt_k = n_neighbors[ma_tsts.index(max(ma_tsts))]
+
+    fig = plt.figure()
+    plt.plot(n_neighbors, ma_trs, n_neighbors, ma_tsts)
+    plt.xlabel('k value')
+    plt.ylabel('Accuracy')
+    plt.legend(['Training Accuracy', 'Test Accuracy'])
+    plt.savefig('k_vs_acc.jpg')
+
+    [neigh, a] = KNN(X, y, n_neighbors = opt_k)
+
+    # Now we've found the optimum k we shall try on the test data
+    test_array, list_of_files = create_tinys_array(test_folder)
+
+    test_out = neigh.predict(test_array)
+
+    write_output(list_of_files, test_out, run_no = 1)
+
+    return ma_trs, ma_tsts, acc, n_neighbors, test_out
+
+def run2(test_folder, export = False, run_num =  4):
+    # Training the algorithm
+
+    test_out = clf.predict(test_array)
+
+    write_output(list_of_files, test_out, run_no = 2)
+
+    return tr_acc, tst_acc, test_out, list_of_files
 
 if __name__ == '__main__':
     # if the commange line has three arguments then the images have been
