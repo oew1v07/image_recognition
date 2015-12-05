@@ -346,6 +346,11 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     # Resize the array so that each row is one dense patch.
     out = np.reshape(patches, (shp[0]*shp[1], shp[2]*shp[3]))
 
+    # For each row do mean centering and normalization
+    m = out.mean(axis = 1)
+    out = (np.transpose(out) - m).transpose()
+    out = normalize(out, axis = 1)
+
     return out
 
 def patches_folder(folder, patch_size = 8, sample_rate = 4, export = False):
@@ -433,7 +438,7 @@ def sample_patches(sample_num = 500):
 
         #Sample from this list
         sample = patch[sample_index,:]
-        
+
         list_of_samples.append(sample)
         list_of_targets.append(target)
 
@@ -442,7 +447,7 @@ def sample_patches(sample_num = 500):
     y = np.vstack(list_of_targets)
     return X, y
 
-
+def find_clusters(X, y, cluster_num = 15)
 
 def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
     # Training the algorithm
