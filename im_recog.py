@@ -564,6 +564,52 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
 
     return la_list_of_centres, la_list_of_words
 
+def find_training_histograms_for_all_images(la_list_of_centres, la_list_of_words, lla_patches_of_each_image, order_of_classes):
+    # Train a knn classifier using all the centres and the targets
+    # Take all the centres and words and stack them
+    # a_centres is the X
+    a_centres = np.vstack(la_list_of_centres)
+
+    # a_words is the y
+    a_words = np.vstack(la_list_of_words)
+
+    neigh, acc = KNN(a_centres, a_words, n_neighbors = 1)
+
+    la_list_of_histograms = []
+    la_list_of_targets = []
+
+    # For each class in lla_patches_of_each_image - i.e. 15
+    for i in lla_patches_of_each_image:
+
+        # Get each images class by getting index of i in
+        # lla_patches_of_each_image and then taking that element of
+        # order_of_classes.
+        class_num = order_of_classes[lla_patches_of_each_image.index(i)]
+
+        # For each image in that class - i.e. 100
+        for j in i:
+            # Now we have an array of each images patches.
+            # Take each patch from an image and find its nearest cluster using
+            # the KNN.
+            predicted_classes_of_patches = neigh.predict(X)
+
+            # Sum each seperate values - like histogram without the graph!
+            # This is for each image
+            predicted_hist, bin_edges  = np.histogram(predicted_classes_of_patches,
+                                                      bins = list(arange(len(order_of_classes))))
+
+            # Append to respective lists
+            la_list_of_histograms.append(predicted_hist)
+            list_of_targets.append(class_num)
+
+    # Vstack these lists! These are the inputs to the linear classifier
+    # We'll need to calculate these again for the test data.
+    histograms = np.vstack(la_list_of_histograms)
+    targets = np.vstack(list_of_targets)
+
+    return histograms, targets
+
+
 def one_vs_all():
     """Trains 15 1 vs all SVM linear classifiers"""
     # Python has a wonderful wrapper function that creates 1 vs all classifiers!
@@ -609,7 +655,7 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
-def run2(test_folder, sample_num = 1000, cluster_num = 100, patch_size = 8, sample_rate = 4):
+def run2(test_folder, sample_num = 2000, cluster_num = 200, patch_size = 8, sample_rate = 4):
 
     # Getting patches for all images, for all classes
     [lla_patches_of_each_image, ll_list_of_jpgs,
@@ -625,8 +671,7 @@ def run2(test_folder, sample_num = 1000, cluster_num = 100, patch_size = 8, samp
                                                          order_of_classes,
                                                          cluster_num = cluster_num)
 
-    a_centres = np.vstack(la_list_of_centres)
-    a_words = np.vstack(la_list_of_words)
+
 
     # To find nearest centre for each patch I think this is equivalent to a
     # k nearest neighbour where the training data are my centres and the k
