@@ -409,6 +409,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
         patches = get_dense_patches(image, patch_size, sample_rate)
         # append each array to list of images
         la_patches_of_each_image.append(patches)
+        print('Finished image at {}'.format(datetime.now().time()))
 
     # join all the arrays in the list using np.vstack,
     # but we also need to have each individual image as a list ofor the future
@@ -416,7 +417,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     # is needed for the nearest neighbour after clustering.
     a_patches_for_class = np.vstack(la_patches_of_each_image)
 
-    return list_of_jpgs, list_of_files, la_patches_of_each_image, a_patches_for_class
+    return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
 
 def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/training',
                                       patch_size = 8, sample_rate = 4):
@@ -459,27 +460,18 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
 
     # At the lowest level an array of patches for each image
     lla_patches_of_each_image = []
-    # Pickle output for this
-    lla_patches_of_each_image_path = join(tr_folder, 'lla_patches_of_each_image.pkl')
 
     # At the lowest level strings of '0.jpg'
     ll_list_of_jpgs = []
-    ll_list_of_jpgs_path = join(tr_folder,'ll_list_of_jpgs.pkl')
-
-    # At the lowest level strings of '/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg'
-    ll_list_of_files = []
-    ll_list_of_files_path = join(tr_folder,'ll_list_of_files.pkl')
 
     # At the lowest level an array of patches for each class (vstack of all images) - for sampling!
     la_patches_for_class = []
-    la_patches_for_class_path = join(tr_folder,'la_patches_for_class.pkl')
 
     order_of_classes = []
-    order_of_classes_path = join(tr_folder,'order_of_classes.pkl')
 
     for path in paths:
 
-        [list_of_jpgs, list_of_files,
+        [list_of_jpgs,
          la_patches_of_each_image,
          a_patches_for_class] = get_dense_patches_for_folder(path,
                                                              patch_size,
@@ -489,8 +481,6 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
 
         ll_list_of_jpgs.append(list_of_jpgs)
 
-        ll_list_of_files.append(list_of_files)
-
         la_patches_for_class.append(a_patches_for_class)
 
         # Create an order of classes
@@ -499,23 +489,7 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
         order_of_classes.append(class_num)
         print('Finished {} at {}'.format(d, datetime.now().time()))
 
-        # Create pickled files
-    with open(lla_patches_of_each_image_path, 'wb') as f:
-        pickle.dump(lla_patches_of_each_image, f)
-
-    with open(ll_list_of_jpgs_path, 'wb') as f:
-        pickle.dump(ll_list_of_jpgs, f)
-
-    with open(ll_list_of_files_path, 'wb') as f:
-        pickle.dump(ll_list_of_files, f)
-
-    with open(la_patches_for_class_path, 'wb') as f:
-        pickle.dump(la_patches_for_class, f)
-
-    with open(order_of_classes_path, 'wb') as f:
-        pickle.dump(order_of_classes, f)
-
-    return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+    return [lla_patches_of_each_image, ll_list_of_jpgs,
             la_patches_for_class, order_of_classes]
 
 def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
@@ -735,53 +709,31 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
 def one_time_get_training_objects(patch_size = 8, sample_rate = 4):
     print('This started at {}'.format(datetime.now().time()))
-    [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+    [lla_patches_of_each_image, ll_list_of_jpgs,
      la_patches_for_class,
      order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
                                                            sample_rate = sample_rate)
+    print('Ended at {}'.format(datetime.now().time()))
+
+    return [lla_patches_of_each_image, ll_list_of_jpgs,
+            la_patches_for_class,
+            order_of_classes]
 
 def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing',
                               patch_size = 8, sample_rate = 4):
     print('This started at {}'.format(datetime.now().time()))
     # We only need a_patches_for_class and list_of_jpgs
-    [list_of_jpgs, list_of_files,
+    [list_of_jpgs,
      la_patches_of_each_image,
      a_patches_for_class] = get_dense_patches_for_folder(test_folder,
                                                          patch_size = 8,
                                                          sample_rate = 4)
-
-    la_patches_of_each_image_path = join(test_folder, 'test_la_patches_of_each_image.pkl')
-    list_of_jpgs_path = join(test_folder, 'test_list_of_jpgs.pkl')
-    # Write out the needed objects to a pickle file
-    with open(la_patches_of_each_image_path, 'wb') as f:
-        pickle.dump(la_patches_of_each_image, f)
-
-    with open(list_of_jpgs_path, 'wb') as f:
-        pickle.dump(list_of_jpgs, f)
-
     return a_patches_for_class, list_of_jpgs
 
 def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
          cluster_num = 200, test_size = 0.4, run_num = 4):
 
     tr_folder = '/Users/olivia/COMP6223/cw3/training'
-    # Load all the pkl files from '/Users/olivia/COMP6223/cw3/training'
-    training_files = ['lla_patches_of_each_image.pkl', 'll_list_of_jpgs.pkl',
-                      'll_list_of_files.pkl', 'la_patches_for_class.pkl',
-                      'order_of_classes.pkl']
-    training_files = [join(tr_folder, i) for i in training_files]
-
-    test_files = ['test_la_patches_of_each_image', 'test_list_of_jpgs.pkl']
-    test_files = [join(test_folder, i) for i in test_files]
-
-    lla_patches_of_each_image = pickle.load(training_files[0])
-    ll_list_of_jpgs = pickle.load(training_files[1])
-    ll_list_of_files = pickle.load(training_files[2])
-    la_patches_for_class = pickle.load(training_files[3])
-    order_of_classes = pickle.load(training_files[4])
-
-    test_la_patches_of_each_image = pickle.load(test_files[0])
-    test_list_of_jpgs = pickle.load(test_files[0])
 
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
@@ -804,16 +756,16 @@ def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
     # Do box plots of accuracies training vs test
 
     # List for each of the test histograms
-    test_list_of_histograms = []
-
-    # Take the test data and work out it histogram
-    for i in test_la_patches_of_each_image:
-        predicted_hist = find_histograms_for_images(neigh, i)
-        test_list_of_histograms.append(predicted_hist)
-
-    test_histograms = np.vstack(test_list_of_histograms)
-
-    predicted_class = ovr.predict(test_histograms)
+    # test_list_of_histograms = []
+    #
+    # # Take the test data and work out it histogram
+    # for i in test_la_patches_of_each_image:
+    #     predicted_hist = find_histograms_for_images(neigh, i)
+    #     test_list_of_histograms.append(predicted_hist)
+    #
+    # test_histograms = np.vstack(test_list_of_histograms)
+    #
+    # predicted_class = ovr.predict(test_histograms)
     # Construct test feature with
     # test_out = clf.predict(test_array)
     #
