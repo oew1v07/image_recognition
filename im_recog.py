@@ -14,6 +14,9 @@ from sklearn.preprocessing import normalize
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import metrics
 from sklearn.cross_validation import train_test_split
+from sklearn.cluster import KMeans
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.svm import LinearSVC
 # from scipy import fftpack, misc
 # from scipy.ndimage.interpolation import zoom
 import matplotlib.pyplot as plt
@@ -348,7 +351,7 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
 
     return out
 
-def patches_folder(folder, patch_size = 8, sample_rate = 4, export = False):
+def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     """Creates one array of dense patches for every image in a folder.
 
     Parameters
@@ -360,13 +363,20 @@ def patches_folder(folder, patch_size = 8, sample_rate = 4, export = False):
     sample_rate: int (default: 4)
         How many pixels apart each patch should be chosen in both x and y
         directions.
-    export: bool (default: False)
-        Whether the resulting array should be saved as a jpg
 
     Returns
     -------
-    out: ndarray
-        an array of all dense patches for the folder
+    list_of_jpgs: list(String)
+        ['0.jpg', '1.jpg', ..., '99.jpg']
+
+    list_of_files: list(String)
+        ['/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg', ...]
+
+    la_patches_of_each_image: list(ndarray)
+        [array_patches(0.jpg), array_patches(1.jpg), ...]
+
+    a_patches_for_class: ndarray
+        array_patches(bedroom)
     """
 
     # Get a list of all the jpegs in a folder
@@ -374,87 +384,191 @@ def patches_folder(folder, patch_size = 8, sample_rate = 4, export = False):
 
     list_of_files = glob(pattern)
 
-    # Create empty array for tinys to go in
-    res = []
+    list_of_jpgs = []
+
+    # Create empty list for patches to go in. Each item is an array for each
+    # image
+    la_patches_of_each_image = []
 
     # load in each jpg separately, create dense patch array and add to an
     # empty list
 
     for im in list_of_files:
+        # Create a String list of files e.g. ['0.jpg','1.jpg', ...]
+        [c, d] = split(im)
+        list_of_jpgs.append(d)
+        # import image into an array
         image = image_to_array(im)
+        # create array of patches for each image
         patches = get_dense_patches(image, patch_size, sample_rate)
-        res.append(patches)
+        # append each array to list of images
+        la_patches_of_each_image.append(patches)
 
-    # join all the arrays in the list using np.vstack
-    patch_array = np.vstack(res)
+    # join all the arrays in the list using np.vstack,
+    # but we also need to have each individual image as a list ofor the future
+    # k nearest neighbor. the vstack is needed for sampling and the list
+    # is needed for the nearest neighbour after clustering.
+    a_patches_for_class = np.vstack(la_patches_of_each_image)
 
-    try:
-        if export:
-            [c, image_class] = split(folder)
-            name = join(c, image_class + '_patches_image.npy')
-            np.save(name, patch_array)
-    except Exception:
-        print("I couldn't save to an npy file")
-        print_exc()
-        return patch_array
+    return list_of_jpgs, list_of_files, la_patches_of_each_image, a_patches_for_class
 
-    return patch_array
+def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/training',
+                                      patch_size = 8, sample_rate = 4):
+    """Creates a matrix of all features for each class
 
-def create_folder_npy(patch_size = 8, sample_rate = 4, export = False):
-    """Creates an npy folder for each folder within the given folder"""
+    Parameters
+    ----------
+    tr_folder: String (default: '/Users/olivia/COMP6223/cw3/training')
+        A filepath to the folder containing all the other class folders.
+    patch_size: int (default: 8)
+        Size of each patch. 8 x 8 patches are recommended.
+    sample_rate: int (default: 4)
+        How many pixels apart each patch should be chosen in both x and y
+        directions.
 
-    paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
+    Returns
+    -------
+    lla_patches_of_each_image: list(list(ndarray))
+        lla_patches_of_each_image[0] = [array_patches(0.jpg), array_patches(1.jpg), ...]
+        where class is determined by order of class.
 
-    list_of_patches = []
+    ll_list_of_jpgs: list(list(String))
+        ll_list_of_jpgs[0] = ['0.jpg', '1.jpg', ..., '99.jpg']
+        but this is in the order they were originally loaded.
+
+    ll_list_of_files: list(list(String))
+        ll_list_of_files[0] = ['/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg', ...]
+        in the order they were originally loaded.
+
+    la_patches_for_class: list(ndarray)
+        la_patches_for_class[0] = [array_patches(bedroom), array_patches(coast), ...]
+        where class is determined by order of class.
+
+    order_of_classes: list(int)
+        order_of_classes in order it was loaded. i.e. [15,2,3,5, ...]
+    """
+
+    # Each class path
+    paths = [join(tr_folder, i) for i in image_folders]
+
+    # At the lowest level an array of patches for each image
+    lla_patches_of_each_image = []
+
+    # At the lowest level strings of '0.jpg'
+    ll_list_of_jpgs = []
+
+    # At the lowest level strings of '/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg'
+    ll_list_of_files = []
+
+    # At the lowest level an array of patches for each class (vstack of all images) - for sampling!
+    la_patches_for_class = []
+
+    order_of_classes = []
 
     for path in paths:
-        patch_array = patches_folder(path, patch_size, sample_rate, export)
-        list_of_patches.append(patch_array)
 
-    return paths, list_of_patches
+        [list_of_jpgs, list_of_files,
+         la_patches_of_each_image,
+         a_patches_for_class] = get_dense_patches_for_folder(path,
+                                                             patch_size,
+                                                             sample_rate)
 
-def sample_patches(sample_num = 500):
-    paths, list_of_patches = create_folder_npy(patch_size = 8, sample_rate = 4, export = False)
+        lla_patches_of_each_image.append(la_patches_of_each_image)
 
-    list_of_samples = []
-    list_of_targets = []
-    for i in paths:
-        [c,d] = split(i)
+        ll_list_of_jpgs.append(list_of_jpgs)
+
+        ll_list_of_files.append(list_of_files)
+
+        la_patches_for_class.append(a_patches_for_class)
+
+        # Create an order of classes
+        [c, d] = split(path)
         class_num = image_classes_names[d]
-        # Create an array of targets for each sample
-        target = np.ones((sample_num,1))
-        target = target*class_num
+        order_of_classes.append(class_num)
 
-        # Get the corresponding patch from list of patches
-        patch = list_of_patches[paths.index(i)]
+    return [lla_patches_of_each_image, ll_list_of_jpgs,
+            ll_list_of_files, la_patches_for_class, order_of_classes]
 
-        # Create an array of 500 random integers between 0 and len(patch)
-        sample_index = np.random.randint(len(patch),size = sample_num)
+def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
 
-        #Sample from this list
-        sample = patch[sample_index,:]
+    # At the lowest level an array of patches from each class: 15 x 500 row array
+    la_list_of_samples = []
+
+    # Samples are for each class
+    for i in order_of_classes:
+
+        # Get the corresponding patch from la_patches_for_class (an array)
+        a_patches_for_class = la_patches_for_class[order_of_classes.index(i)]
+
+        # Create an array of 500 random integers between 0 and
+        # len(patches_for_class)
+        sample_index = np.random.randint(len(a_patches_for_class),size = sample_num)
+
+        #Sample from the array using the indexes
+        sample = a_patches_for_class[sample_index,:]
 
         # Only normalize and mean centre once I have the sample!
+        # Do this along the rows (axis = 1)
         m = sample.mean(axis = 1)
+
+        # Have to transpose as it won't take subtract along columns properly
         out = (np.transpose(sample) - m).transpose()
+
+        # Make unit length along the rows
         out = normalize(out, axis = 1)
 
-        list_of_samples.append(out)
-        list_of_targets.append(target)
+        # Append to the list
+        la_list_of_samples.append(out)
 
-    # DO NOT PUT TOGETHER!!!
-    # X = np.vstack(list_of_samples)
-    # y = np.vstack(list_of_targets)
-    return list_of_samples, list_of_targets
+    return la_list_of_samples
 
-def find_clusters(list_of_samples, list_of_targets, cluster_num = 15, test_size = 0.4):
-    list_of_clusters = []
-    # Split into test and training datasets
-    for i in range(len(list_of_samples)):
-        X = list_of_samples[i]
-        y = list_of_targets[i]
-        [X_train, X_test, y_train, y_test] = train_test_split(X, y, test_size=test_size)
+def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
+    """Creates the codebook to do linear classification on.
 
+    This creates cluster_num x centres for each image class.
+
+    Parameters
+    ----------
+    la_list_of_samples: list(ndarray)
+        A list of all the ndarrays with the samples as rows in the ndarray.
+        Each item represents a class
+    order_of_classes: list(int)
+        A list of the order the classes were loaded in
+    cluster_num: int
+        k value or number of clusters for each image class to have
+
+    Returns
+    -------
+    la_list_of_centres: list(ndarray)
+        A list with each item being the array of cluster_num x centres for
+        each class.
+    la_list_of_words: list(ndarray)
+        Each item is an array of targets for each centre.
+    """
+
+    la_list_of_centres = []
+    la_list_of_words = []
+
+    for i in range(len(la_list_of_samples)):
+        X = la_list_of_samples[i]
+        # Remember this is for each of the class sets - and that there's no such
+        # thing as accuracy for this type of clustering. So they'll be
+        # cluster_num x clusters for each class.
+        kmc = KMeans(n_clusters = cluster_num)
+        kmc.fit(X)
+        centres = kmc.cluster_centers_
+        words = order_of_classes[i]*np.ones((cluster_num,1))
+
+        la_list_of_centres.append(centres)
+        la_list_of_words.append(words)
+
+    return la_list_of_centres, la_list_of_words
+
+def one_vs_all():
+    """Trains 15 1 vs all SVM linear classifiers"""
+    # Python has a wonderful wrapper function that creates 1 vs all classifiers!
+
+    ovr = OneVsRestClassifier(estimator = LinearSVC())
 
 def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
     # Training the algorithm
@@ -495,14 +609,44 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
-def run2(test_folder, export = False, run_num =  4):
-    # Training the algorithm
+def run2(test_folder, sample_num = 1000, cluster_num = 100, patch_size = 8, sample_rate = 4):
 
-    test_out = clf.predict(test_array)
+    # Getting patches for all images, for all classes
+    [lla_patches_of_each_image, ll_list_of_jpgs,
+     ll_list_of_files, la_patches_for_class,
+     order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
+                                                           sample_rate = sample_rate)
+    # Sampling
+    la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
+                                        sample_num = sample_num)
 
-    write_output(list_of_files, test_out, run_no = 2)
+    # Creating a codebook
+    la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
+                                                         order_of_classes,
+                                                         cluster_num = cluster_num)
 
-    return tr_acc, tst_acc, test_out, list_of_files
+    a_centres = np.vstack(la_list_of_centres)
+    a_words = np.vstack(la_list_of_words)
+
+    # To find nearest centre for each patch I think this is equivalent to a
+    # k nearest neighbour where the training data are my centres and the k
+    # value is 1.
+
+    # What do I train my class my classifier on?
+
+    # How do I test it?
+
+    # So I split the list of patches into training and test data
+
+
+    # Construct test feature with
+    # test_out = clf.predict(test_array)
+    #
+    # write_output(list_of_files, test_out, run_no = 2)
+
+    return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+            la_patches_for_class, order_of_classes, la_list_of_samples,
+            la_list_of_centres, la_list_of_words, a_centres, a_words]
 
 if __name__ == '__main__':
     # if the commange line has three arguments then the images have been
