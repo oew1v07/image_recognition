@@ -4,8 +4,6 @@ This script takes training data to create a classifier that then tries to classi
 a number of untrained images."""
 
 import numpy as np
-# from numpy.fft import fft2, ifft2, fftshift
-# from numpy.testing import assert_array_equal
 from skimage.io import imread, imsave
 from skimage.transform import resize
 from skimage.util import view_as_windows
@@ -17,14 +15,13 @@ from sklearn.cross_validation import train_test_split
 from sklearn.cluster import KMeans
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
-# from scipy import fftpack, misc
-# from scipy.ndimage.interpolation import zoom
 import matplotlib.pyplot as plt
 from os.path import join, split #, exists, splitext
 from os import getcwd
 import sys
 from traceback import print_exc
-
+import pickle
+from datetime import datetime
 
 def _dim(number):
     """Raises an error if a number is greater than 2"""
@@ -349,6 +346,15 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     # Resize the array so that each row is one dense patch.
     out = np.reshape(patches, (shp[0]*shp[1], shp[2]*shp[3]))
 
+    # Normalize the data
+    m = out.mean(axis = 1)
+
+    # Have to transpose as it won't take subtract along columns properly
+    out = (np.transpose(out) - m).transpose()
+
+    # Make unit length along the rows
+    out = normalize(out, axis = 1)
+
     return out
 
 def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
@@ -453,17 +459,23 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
 
     # At the lowest level an array of patches for each image
     lla_patches_of_each_image = []
+    # Pickle output for this
+    lla_patches_of_each_image_path = join(tr_folder, 'lla_patches_of_each_image.pkl')
 
     # At the lowest level strings of '0.jpg'
     ll_list_of_jpgs = []
+    ll_list_of_jpgs_path = join(tr_folder,'ll_list_of_jpgs.pkl')
 
     # At the lowest level strings of '/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg'
     ll_list_of_files = []
+    ll_list_of_files_path = join(tr_folder,'ll_list_of_files.pkl')
 
     # At the lowest level an array of patches for each class (vstack of all images) - for sampling!
     la_patches_for_class = []
+    la_patches_for_class_path = join(tr_folder,'la_patches_for_class.pkl')
 
     order_of_classes = []
+    order_of_classes_path = join(tr_folder,'order_of_classes.pkl')
 
     for path in paths:
 
@@ -485,9 +497,26 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
         [c, d] = split(path)
         class_num = image_classes_names[d]
         order_of_classes.append(class_num)
+        print('Finished {} at {}'.format(d, datetime.now().time()))
 
-    return [lla_patches_of_each_image, ll_list_of_jpgs,
-            ll_list_of_files, la_patches_for_class, order_of_classes]
+        # Create pickled files
+    with open(lla_patches_of_each_image_path, 'wb') as f:
+        pickle.dump(lla_patches_of_each_image, f)
+
+    with open(ll_list_of_jpgs_path, 'wb') as f:
+        pickle.dump(ll_list_of_jpgs, f)
+
+    with open(ll_list_of_files_path, 'wb') as f:
+        pickle.dump(ll_list_of_files, f)
+
+    with open(la_patches_for_class_path, 'wb') as f:
+        pickle.dump(la_patches_for_class, f)
+
+    with open(order_of_classes_path, 'wb') as f:
+        pickle.dump(order_of_classes, f)
+
+    return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+            la_patches_for_class, order_of_classes]
 
 def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
 
@@ -506,16 +535,6 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
 
         #Sample from the array using the indexes
         sample = a_patches_for_class[sample_index,:]
-
-        # Only normalize and mean centre once I have the sample!
-        # Do this along the rows (axis = 1)
-        m = sample.mean(axis = 1)
-
-        # Have to transpose as it won't take subtract along columns properly
-        out = (np.transpose(sample) - m).transpose()
-
-        # Make unit length along the rows
-        out = normalize(out, axis = 1)
 
         # Append to the list
         la_list_of_samples.append(out)
@@ -564,7 +583,53 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
 
     return la_list_of_centres, la_list_of_words
 
-def find_training_histograms_for_all_images(la_list_of_centres, la_list_of_words, lla_patches_of_each_image, order_of_classes):
+def find_histograms_for_images(neigh, patches_of_each_image):
+    """ Creates histogram for an array of patches. This is for one image
+
+    Parameters
+    ----------
+    neigh: KNeighborsClassifier
+        The classifier with which to classify each patch
+    patches_of_each_image: list(ndarray)
+        This needs to be an array for each image with each row in that array
+        being a "patch".
+
+    Returns
+    -------
+    histogram: ndarray
+        A (1,15) array with each entry corresponding to the number of patches
+        identified as each class given by the index. ie an image may have 10
+        patches and may have 7 patches identified by the KNN classifier as being
+        class 10 but also 1 each for classes 1, 2 and 3. This would result in an
+        ndarray like so: [1,1,1,0,0,0,0,0,0,0,7,0,0,0,0] (confusing because the
+        first class is the 0th index).
+    """
+
+    # Now we have an array of each images patches.
+    # Take each patch from an image and find its nearest cluster using
+    # the KNN.
+    predicted_classes_of_patches = neigh.predict(patches_of_each_image)
+
+    # Sum each seperate values - like histogram without the graph!
+    # This is for each image
+    predicted_hist, bin_edges  = np.histogram(predicted_classes_of_patches,
+                                              bins = list(range(1, len(order_of_classes)+1)))
+
+    return predicted_hist
+
+def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
+                                    lla_patches_of_each_image, order_of_classes):
+    """Puts training data into a format so the histogram function can be run
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    targets: ndarray
+        The class with which each image is associated
+    """
+
     # Train a knn classifier using all the centres and the targets
     # Take all the centres and words and stack them
     # a_centres is the X
@@ -586,35 +651,47 @@ def find_training_histograms_for_all_images(la_list_of_centres, la_list_of_words
         # order_of_classes.
         class_num = order_of_classes[lla_patches_of_each_image.index(i)]
 
-        # For each image in that class - i.e. 100
         for j in i:
-            # Now we have an array of each images patches.
-            # Take each patch from an image and find its nearest cluster using
-            # the KNN.
-            predicted_classes_of_patches = neigh.predict(X)
-
-            # Sum each seperate values - like histogram without the graph!
-            # This is for each image
-            predicted_hist, bin_edges  = np.histogram(predicted_classes_of_patches,
-                                                      bins = list(arange(len(order_of_classes))))
-
-            # Append to respective lists
-            la_list_of_histograms.append(predicted_hist)
+            histogram = find_histograms_for_images(neigh, j)
             list_of_targets.append(class_num)
+            # Append to respective lists
+            la_list_of_histograms.append(histogram)
 
-    # Vstack these lists! These are the inputs to the linear classifier
-    # We'll need to calculate these again for the test data.
-    histograms = np.vstack(la_list_of_histograms)
-    targets = np.vstack(list_of_targets)
+        # Vstack these lists! These are the inputs to the linear classifier
+        # We'll need to calculate these for the test and training data.
+        # This is the X for the linear classifier
+        histograms = np.vstack(la_list_of_histograms)
 
-    return histograms, targets
+        # This is the y for the linear classifier
+        targets = np.vstack(list_of_targets)
 
+        return histograms, targets, neigh
 
-def one_vs_all():
+def one_vs_all(X, y, test_size = 0.4, run_num = 4):
     """Trains 15 1 vs all SVM linear classifiers"""
     # Python has a wonderful wrapper function that creates 1 vs all classifiers!
 
     ovr = OneVsRestClassifier(estimator = LinearSVC())
+
+    acc_tr = []
+    acc_tst = []
+
+    for i in range(run_num):
+        [X_train, X_test, y_train, y_test] = train_test_split(X, y,
+                                                              test_size=test_size)
+        # Train the classifier
+        ovr.fit(X_train, y_train)
+
+        # Work out the score on the training data. However there is nothing
+        # to optimise for - we are just getting an idea of the accuracy for
+        # training vs test data. box plot opportunity!
+        tr_acc = ovr.score(X_train, y_train)
+        tst_acc = ovr.score(X_test, y_test)
+
+        acc_tr.append(tr_acc)
+        acc_tst.append(tst_acc)
+
+    return ovr, acc_tr, acc_tst
 
 def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
     # Training the algorithm
@@ -655,13 +732,57 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
-def run2(test_folder, sample_num = 2000, cluster_num = 200, patch_size = 8, sample_rate = 4):
 
-    # Getting patches for all images, for all classes
-    [lla_patches_of_each_image, ll_list_of_jpgs,
-     ll_list_of_files, la_patches_for_class,
+def one_time_get_training_objects(patch_size = 8, sample_rate = 4):
+    print('This started at {}'.format(datetime.now().time()))
+    [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+     la_patches_for_class,
      order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
                                                            sample_rate = sample_rate)
+
+def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing',
+                              patch_size = 8, sample_rate = 4):
+    print('This started at {}'.format(datetime.now().time()))
+    # We only need a_patches_for_class and list_of_jpgs
+    [list_of_jpgs, list_of_files,
+     la_patches_of_each_image,
+     a_patches_for_class] = get_dense_patches_for_folder(test_folder,
+                                                         patch_size = 8,
+                                                         sample_rate = 4)
+
+    la_patches_of_each_image_path = join(test_folder, 'test_la_patches_of_each_image.pkl')
+    list_of_jpgs_path = join(test_folder, 'test_list_of_jpgs.pkl')
+    # Write out the needed objects to a pickle file
+    with open(la_patches_of_each_image_path, 'wb') as f:
+        pickle.dump(la_patches_of_each_image, f)
+
+    with open(list_of_jpgs_path, 'wb') as f:
+        pickle.dump(list_of_jpgs, f)
+
+    return a_patches_for_class, list_of_jpgs
+
+def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
+         cluster_num = 200, test_size = 0.4, run_num = 4):
+
+    tr_folder = '/Users/olivia/COMP6223/cw3/training'
+    # Load all the pkl files from '/Users/olivia/COMP6223/cw3/training'
+    training_files = ['lla_patches_of_each_image.pkl', 'll_list_of_jpgs.pkl',
+                      'll_list_of_files.pkl', 'la_patches_for_class.pkl',
+                      'order_of_classes.pkl']
+    training_files = [join(tr_folder, i) for i in training_files]
+
+    test_files = ['test_la_patches_of_each_image', 'test_list_of_jpgs.pkl']
+    test_files = [join(test_folder, i) for i in test_files]
+
+    lla_patches_of_each_image = pickle.load(training_files[0])
+    ll_list_of_jpgs = pickle.load(training_files[1])
+    ll_list_of_files = pickle.load(training_files[2])
+    la_patches_for_class = pickle.load(training_files[3])
+    order_of_classes = pickle.load(training_files[4])
+
+    test_la_patches_of_each_image = pickle.load(test_files[0])
+    test_list_of_jpgs = pickle.load(test_files[0])
+
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
                                         sample_num = sample_num)
@@ -671,23 +792,32 @@ def run2(test_folder, sample_num = 2000, cluster_num = 200, patch_size = 8, samp
                                                          order_of_classes,
                                                          cluster_num = cluster_num)
 
+    [histograms, targets,
+     neigh] = get_training_data_for_histogram(la_list_of_centres,
+                                              la_list_of_words,
+                                              lla_patches_of_each_image,
+                                              order_of_classes)
 
+    ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
+                                      test_size = test_size, run_num = run_num)
 
-    # To find nearest centre for each patch I think this is equivalent to a
-    # k nearest neighbour where the training data are my centres and the k
-    # value is 1.
+    # Do box plots of accuracies training vs test
 
-    # What do I train my class my classifier on?
+    # List for each of the test histograms
+    test_list_of_histograms = []
 
-    # How do I test it?
+    # Take the test data and work out it histogram
+    for i in test_la_patches_of_each_image:
+        predicted_hist = find_histograms_for_images(neigh, i)
+        test_list_of_histograms.append(predicted_hist)
 
-    # So I split the list of patches into training and test data
+    test_histograms = np.vstack(test_list_of_histograms)
 
-
+    predicted_class = ovr.predict(test_histograms)
     # Construct test feature with
     # test_out = clf.predict(test_array)
     #
-    # write_output(list_of_files, test_out, run_no = 2)
+    # write_output(test_list_of_jpgs, predicted_class, run_no = 2)
 
     return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
             la_patches_for_class, order_of_classes, la_list_of_samples,
