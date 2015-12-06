@@ -511,7 +511,7 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
         sample = a_patches_for_class[sample_index,:]
 
         # Append to the list
-        la_list_of_samples.append(out)
+        la_list_of_samples.append(sample)
 
     return la_list_of_samples
 
@@ -706,19 +706,6 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
-
-def one_time_get_training_objects(patch_size = 8, sample_rate = 4):
-    print('This started at {}'.format(datetime.now().time()))
-    [lla_patches_of_each_image, ll_list_of_jpgs,
-     la_patches_for_class,
-     order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
-                                                           sample_rate = sample_rate)
-    print('Ended at {}'.format(datetime.now().time()))
-
-    return [lla_patches_of_each_image, ll_list_of_jpgs,
-            la_patches_for_class,
-            order_of_classes]
-
 def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing',
                               patch_size = 8, sample_rate = 4):
     print('This started at {}'.format(datetime.now().time()))
@@ -731,9 +718,14 @@ def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing'
     return a_patches_for_class, list_of_jpgs
 
 def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
-         cluster_num = 200, test_size = 0.4, run_num = 4):
+         cluster_num = 200, test_size = 0.4, run_num = 4, patch_size = 8, sample_rate = 4):
 
-    tr_folder = '/Users/olivia/COMP6223/cw3/training'
+    print('This started at {}'.format(datetime.now().time()))
+    [lla_patches_of_each_image, ll_list_of_jpgs,
+     la_patches_for_class,
+     order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
+                                                           sample_rate = sample_rate)
+    print('Ended at {}'.format(datetime.now().time()))
 
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
