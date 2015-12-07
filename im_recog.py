@@ -15,6 +15,7 @@ from sklearn.cross_validation import train_test_split
 from sklearn.cluster import KMeans
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import LinearSVC
+from sklearn.externals import joblib
 import matplotlib.pyplot as plt
 from os.path import join, split #, exists, splitext
 from os import getcwd
@@ -499,10 +500,10 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
     la_list_of_samples = []
 
     # Samples are for each class
-    for i in order_of_classes:
+    for index, i in enumerate(order_of_classes):
 
         # Get the corresponding patch from la_patches_for_class (an array)
-        a_patches_for_class = la_patches_for_class[order_of_classes.index(i)]
+        a_patches_for_class = la_patches_for_class[index]
 
         # Create an array of 500 random integers between 0 and
         # len(patches_for_class)
@@ -543,15 +544,15 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
     la_list_of_centres = []
     la_list_of_words = []
 
-    for i in range(len(la_list_of_samples)):
-        X = la_list_of_samples[i]
+    for index, i in enumerate(la_list_of_samples):
+        X = i
         # Remember this is for each of the class sets - and that there's no such
         # thing as accuracy for this type of clustering. So they'll be
         # cluster_num x clusters for each class.
         kmc = KMeans(n_clusters = cluster_num)
         kmc.fit(X)
         centres = kmc.cluster_centers_
-        words = order_of_classes[i]*np.ones((cluster_num,1))
+        words = order_of_classes[index]*np.ones((cluster_num,1))
 
         la_list_of_centres.append(centres)
         la_list_of_words.append(words)
@@ -726,7 +727,7 @@ def one_time_get_test_objects(test_folder = '/Users/robin/COMP6223/cw3/testing',
     return a_patches_for_class, list_of_jpgs
 
 def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
-         cluster_num = 200, test_size = 0.4, run_num = 4, patch_size = 8, sample_rate = 4):
+         cluster_num = 200, test_size = 0.4, run_num = 100, patch_size = 8, sample_rate = 4):
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_patches_of_each_image, ll_list_of_jpgs,
@@ -750,8 +751,12 @@ def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
                                               lla_patches_of_each_image,
                                               order_of_classes)
 
+    joblib.dump(neigh, 'neigh.pkl')
+
     ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
                                       test_size = test_size, run_num = run_num)
+
+    joblib.dump(ovr, 'ovr.pkl')
 
     # Do box plots of accuracies training vs test
 
