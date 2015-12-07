@@ -22,6 +22,7 @@ import sys
 from traceback import print_exc
 import pickle
 from datetime import datetime
+from tqdm import tqdm
 
 def _dim(number):
     """Raises an error if a number is greater than 2"""
@@ -244,7 +245,7 @@ def write_output(glob_list, y, run_no):
     return out_path
 
 def training_tiny_image(export = False, pixels = 16):
-    paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
+    paths = [join('/Users/robin/COMP6223/cw3/training', i) for i in image_folders]
 
     length = len(paths)
 
@@ -376,7 +377,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
         ['0.jpg', '1.jpg', ..., '99.jpg']
 
     list_of_files: list(String)
-        ['/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg', ...]
+        ['/Users/robin/COMP6223/cw3/training/bedroom/0.jpg', ...]
 
     la_patches_of_each_image: list(ndarray)
         [array_patches(0.jpg), array_patches(1.jpg), ...]
@@ -419,13 +420,13 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
 
     return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
 
-def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/training',
+def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/training',
                                       patch_size = 8, sample_rate = 4):
     """Creates a matrix of all features for each class
 
     Parameters
     ----------
-    tr_folder: String (default: '/Users/olivia/COMP6223/cw3/training')
+    tr_folder: String (default: '/Users/robin/COMP6223/cw3/training')
         A filepath to the folder containing all the other class folders.
     patch_size: int (default: 8)
         Size of each patch. 8 x 8 patches are recommended.
@@ -444,7 +445,7 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/tr
         but this is in the order they were originally loaded.
 
     ll_list_of_files: list(list(String))
-        ll_list_of_files[0] = ['/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg', ...]
+        ll_list_of_files[0] = ['/Users/robin/COMP6223/cw3/training/bedroom/0.jpg', ...]
         in the order they were originally loaded.
 
     la_patches_for_class: list(ndarray)
@@ -557,7 +558,7 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
 
     return la_list_of_centres, la_list_of_words
 
-def find_histograms_for_images(neigh, patches_of_each_image):
+def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
     """ Creates histogram for an array of patches. This is for one image
 
     Parameters
@@ -587,7 +588,7 @@ def find_histograms_for_images(neigh, patches_of_each_image):
     # Sum each seperate values - like histogram without the graph!
     # This is for each image
     predicted_hist, bin_edges  = np.histogram(predicted_classes_of_patches,
-                                              bins = list(range(1, len(order_of_classes)+1)))
+                                              bins = list(range(1, len(order_of_classes)+2)))
 
     return predicted_hist
 
@@ -618,28 +619,35 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     la_list_of_targets = []
 
     # For each class in lla_patches_of_each_image - i.e. 15
-    for i in lla_patches_of_each_image:
+    for index, i in tqdm(enumerate(lla_patches_of_each_image)):
 
         # Get each images class by getting index of i in
         # lla_patches_of_each_image and then taking that element of
         # order_of_classes.
-        class_num = order_of_classes[lla_patches_of_each_image.index(i)]
+        class_num = order_of_classes[index]
 
-        for j in i:
-            histogram = find_histograms_for_images(neigh, j)
-            list_of_targets.append(class_num)
+        for j in tqdm(i):
+            histogram = find_histograms_for_images(neigh, j, order_of_classes)
+            la_list_of_targets.append(class_num)
             # Append to respective lists
             la_list_of_histograms.append(histogram)
 
-        # Vstack these lists! These are the inputs to the linear classifier
-        # We'll need to calculate these for the test and training data.
-        # This is the X for the linear classifier
-        histograms = np.vstack(la_list_of_histograms)
+        print('Saved for %d' % order_of_classes[index])
+        np.save('%d.npy' % index, histogram)
 
-        # This is the y for the linear classifier
-        targets = np.vstack(list_of_targets)
+    # Vstack these lists! These are the inputs to the linear classifier
+    # We'll need to calculate these for the test and training data.
+    # This is the X for the linear classifier
+    histograms = np.vstack(la_list_of_histograms)
 
-        return histograms, targets, neigh
+    # This is the y for the linear classifier
+    targets = np.vstack(la_list_of_targets)
+
+    print('About to save')
+    np.save('histograms.npy', histograms)
+    np.save('targets.npy', targets)
+
+    return histograms, targets, neigh
 
 def one_vs_all(X, y, test_size = 0.4, run_num = 4):
     """Trains 15 1 vs all SVM linear classifiers"""
@@ -654,13 +662,13 @@ def one_vs_all(X, y, test_size = 0.4, run_num = 4):
         [X_train, X_test, y_train, y_test] = train_test_split(X, y,
                                                               test_size=test_size)
         # Train the classifier
-        ovr.fit(X_train, y_train)
+        ovr.fit(X_train, y_train.ravel())
 
         # Work out the score on the training data. However there is nothing
         # to optimise for - we are just getting an idea of the accuracy for
         # training vs test data. box plot opportunity!
-        tr_acc = ovr.score(X_train, y_train)
-        tst_acc = ovr.score(X_test, y_test)
+        tr_acc = ovr.score(X_train, y_train.ravel())
+        tst_acc = ovr.score(X_test, y_test.ravel())
 
         acc_tr.append(tr_acc)
         acc_tst.append(tst_acc)
@@ -706,7 +714,7 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
-def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing',
+def one_time_get_test_objects(test_folder = '/Users/robin/COMP6223/cw3/testing',
                               patch_size = 8, sample_rate = 4):
     print('This started at {}'.format(datetime.now().time()))
     # We only need a_patches_for_class and list_of_jpgs
@@ -717,7 +725,7 @@ def one_time_get_test_objects(test_folder = '/Users/olivia/COMP6223/cw3/testing'
                                                          sample_rate = 4)
     return a_patches_for_class, list_of_jpgs
 
-def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
+def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
          cluster_num = 200, test_size = 0.4, run_num = 4, patch_size = 8, sample_rate = 4):
 
     print('This started at {}'.format(datetime.now().time()))
@@ -763,9 +771,9 @@ def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
     #
     # write_output(test_list_of_jpgs, predicted_class, run_no = 2)
 
-    return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+    return [lla_patches_of_each_image, ll_list_of_jpgs,
             la_patches_for_class, order_of_classes, la_list_of_samples,
-            la_list_of_centres, la_list_of_words, a_centres, a_words]
+            la_list_of_centres, la_list_of_words]
 
 if __name__ == '__main__':
     # if the commange line has three arguments then the images have been
