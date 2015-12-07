@@ -555,9 +555,17 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
         la_list_of_centres.append(centres)
         la_list_of_words.append(words)
 
-    return la_list_of_centres, la_list_of_words
 
-def find_histograms_for_images(neigh, patches_of_each_image):
+        # Take all the centres and words and stack them
+        # a_centres is the X
+        a_centres = np.vstack(la_list_of_centres)
+
+        # a_words is the y
+        a_words = np.vstack(la_list_of_words)
+
+    return a_centres, a_words
+
+def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
     """ Creates histogram for an array of patches. This is for one image
 
     Parameters
@@ -591,7 +599,7 @@ def find_histograms_for_images(neigh, patches_of_each_image):
 
     return predicted_hist
 
-def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
+def get_training_data_for_histogram(a_centres, a_words,
                                     lla_patches_of_each_image, order_of_classes):
     """Puts training data into a format so the histogram function can be run
 
@@ -605,13 +613,6 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     """
 
     # Train a knn classifier using all the centres and the targets
-    # Take all the centres and words and stack them
-    # a_centres is the X
-    a_centres = np.vstack(la_list_of_centres)
-
-    # a_words is the y
-    a_words = np.vstack(la_list_of_words)
-
     neigh, acc = KNN(a_centres, a_words, n_neighbors = 1)
 
     la_list_of_histograms = []
@@ -626,20 +627,20 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
         class_num = order_of_classes[lla_patches_of_each_image.index(i)]
 
         for j in i:
-            histogram = find_histograms_for_images(neigh, j)
-            list_of_targets.append(class_num)
+            histogram = find_histograms_for_images(neigh, j, order_of_classes)
+            la_list_of_targets.append(class_num)
             # Append to respective lists
             la_list_of_histograms.append(histogram)
 
-        # Vstack these lists! These are the inputs to the linear classifier
-        # We'll need to calculate these for the test and training data.
-        # This is the X for the linear classifier
-        histograms = np.vstack(la_list_of_histograms)
+    # Vstack these lists! These are the inputs to the linear classifier
+    # We'll need to calculate these for the test and training data.
+    # This is the X for the linear classifier
+    histograms = np.vstack(la_list_of_histograms)
 
-        # This is the y for the linear classifier
-        targets = np.vstack(list_of_targets)
+    # This is the y for the linear classifier
+    targets = np.vstack(la_list_of_targets)
 
-        return histograms, targets, neigh
+    return histograms, targets, neigh
 
 def one_vs_all(X, y, test_size = 0.4, run_num = 4):
     """Trains 15 1 vs all SVM linear classifiers"""
@@ -654,13 +655,13 @@ def one_vs_all(X, y, test_size = 0.4, run_num = 4):
         [X_train, X_test, y_train, y_test] = train_test_split(X, y,
                                                               test_size=test_size)
         # Train the classifier
-        ovr.fit(X_train, y_train)
+        ovr.fit(X_train, y_train.ravel)
 
         # Work out the score on the training data. However there is nothing
         # to optimise for - we are just getting an idea of the accuracy for
         # training vs test data. box plot opportunity!
-        tr_acc = ovr.score(X_train, y_train)
-        tst_acc = ovr.score(X_test, y_test)
+        tr_acc = ovr.score(X_train, y_train.ravel)
+        tst_acc = ovr.score(X_test, y_test.ravel)
 
         acc_tr.append(tr_acc)
         acc_tst.append(tst_acc)
@@ -732,15 +733,19 @@ def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
                                         sample_num = sample_num)
 
     # Creating a codebook
-    la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
+    a_centres, a_words = find_clusters(la_list_of_samples,
                                                          order_of_classes,
                                                          cluster_num = cluster_num)
 
+
     [histograms, targets,
-     neigh] = get_training_data_for_histogram(la_list_of_centres,
-                                              la_list_of_words,
+     neigh] = get_training_data_for_histogram(a_centres, a_words,
                                               lla_patches_of_each_image,
                                               order_of_classes)
+
+    # possibly save out histograms and targets for ovr
+
+
 
     ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
                                       test_size = test_size, run_num = run_num)
@@ -752,7 +757,7 @@ def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
     #
     # # Take the test data and work out it histogram
     # for i in test_la_patches_of_each_image:
-    #     predicted_hist = find_histograms_for_images(neigh, i)
+    #     predicted_hist = find_histograms_for_images(neigh, i,order_of_classes)
     #     test_list_of_histograms.append(predicted_hist)
     #
     # test_histograms = np.vstack(test_list_of_histograms)
@@ -763,9 +768,9 @@ def run2(test_folder = '/Users/olivia/COMP6223/cw3/testing', sample_num = 2000,
     #
     # write_output(test_list_of_jpgs, predicted_class, run_no = 2)
 
-    return [lla_patches_of_each_image, ll_list_of_jpgs, ll_list_of_files,
+    return [lla_patches_of_each_image, ll_list_of_jpgs,
             la_patches_for_class, order_of_classes, la_list_of_samples,
-            la_list_of_centres, la_list_of_words, a_centres, a_words]
+            la_list_of_centres, la_list_of_words]
 
 if __name__ == '__main__':
     # if the commange line has three arguments then the images have been
