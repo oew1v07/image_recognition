@@ -24,15 +24,19 @@ from traceback import print_exc
 import pickle
 from datetime import datetime
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import savefig
+
 
 def _dim(number):
     """Raises an error if a number is greater than 2"""
     if number > 2:
         raise ValueError("Only dimensions of 2 are allowed. "
-                        "Got {number}.".format(number = number))
+                         "Got {number}.".format(number = number))
     elif number < 2:
         raise ValueError("Only dimensions of 2 are allowed. "
-                        "Got {number}.".format(number = number))
+                         "Got {number}.".format(number = number))
+
 
 def _check_type(ar, data_types):
     """Raises an error if ar is not of the type given"""
@@ -51,6 +55,7 @@ for k, v in image_classes_names.items():
     image_classes_int[v] = k
 
 image_folders = list(image_classes_names.keys())
+
 
 def image_to_array(image):
     """Reads in image and turns values into a numpy array
@@ -74,6 +79,7 @@ def image_to_array(image):
     # Uses PIL plugin to read image in
     out = imread(image)
     return out
+
 
 def create_tiny_image(image, pixels = 16):
     """Creates a tiny image which is a resized, squared version of the original.
@@ -156,6 +162,7 @@ def create_tiny_image(image, pixels = 16):
 
     return tiny, out
 
+
 def create_tinys_array(folder, export = False, pixels = 16):
     """Creates an array of tiny images from images within a specified folder.
 
@@ -205,6 +212,7 @@ def create_tinys_array(folder, export = False, pixels = 16):
 
     return array, list_of_files
 
+
 def write_output(glob_list, y, run_no):
     """Writes the output in the format specified
 
@@ -245,6 +253,7 @@ def write_output(glob_list, y, run_no):
                 t.write("\n")
     return out_path
 
+
 def training_tiny_image(export = False, pixels = 16):
     paths = [join('/Users/robin/COMP6223/cw3/training', i) for i in image_folders]
 
@@ -267,6 +276,7 @@ def training_tiny_image(export = False, pixels = 16):
         targets[start:end_point,:] = class_num*np.ones((100,1))
         start = start + chunk
     return tiny_images, targets
+
 
 def KNN(X, y, n_neighbors = 5):
     """Fits a K nearest neighbour classifier to the given data.
@@ -297,6 +307,7 @@ def KNN(X, y, n_neighbors = 5):
     acc = neigh.score(X, y)
     return neigh, acc
 
+
 def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
     tr_acc = []
     tst_acc = []
@@ -318,6 +329,7 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
         tst_acc.append(acc_tst)
 
     return tr_acc, tst_acc, neigh
+
 
 def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     """Gets dense patches of pixels from an image.
@@ -358,6 +370,7 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     out = normalize(out, axis = 1)
 
     return out
+
 
 def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     """Creates one array of dense patches for every image in a folder.
@@ -420,6 +433,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     a_patches_for_class = np.vstack(la_patches_of_each_image)
 
     return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
+
 
 def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/training',
                                       patch_size = 8, sample_rate = 4):
@@ -494,6 +508,7 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/tra
     return [lla_patches_of_each_image, ll_list_of_jpgs,
             la_patches_for_class, order_of_classes]
 
+
 def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
 
     # At the lowest level an array of patches from each class: 15 x 500 row array
@@ -516,6 +531,7 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
         la_list_of_samples.append(sample)
 
     return la_list_of_samples
+
 
 def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
     """Creates the codebook to do linear classification on.
@@ -559,6 +575,7 @@ def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
 
     return la_list_of_centres, la_list_of_words
 
+
 def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
     """ Creates histogram for an array of patches. This is for one image
 
@@ -588,10 +605,11 @@ def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
 
     # Sum each seperate values - like histogram without the graph!
     # This is for each image
-    predicted_hist, bin_edges  = np.histogram(predicted_classes_of_patches,
-                                              bins = list(range(1, len(order_of_classes)+2)))
+    predicted_hist, bin_edges = np.histogram(predicted_classes_of_patches,
+                                              bins=list(range(1, len(order_of_classes) + 2)))
 
     return predicted_hist
+
 
 def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
                                     lla_patches_of_each_image, order_of_classes):
@@ -650,6 +668,7 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
 
     return histograms, targets, neigh
 
+
 def one_vs_all(X, y, test_size = 0.4, run_num = 4):
     """Trains 15 1 vs all SVM linear classifiers"""
     # Python has a wonderful wrapper function that creates 1 vs all classifiers!
@@ -675,6 +694,7 @@ def one_vs_all(X, y, test_size = 0.4, run_num = 4):
         acc_tst.append(tst_acc)
 
     return ovr, acc_tr, acc_tst
+
 
 def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
     # Training the algorithm
@@ -715,6 +735,7 @@ def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num = 
 
     return ma_trs, ma_tsts, acc, n_neighbors, test_out
 
+
 def one_time_get_test_objects(test_folder = '/Users/robin/COMP6223/cw3/testing',
                               patch_size = 8, sample_rate = 4):
     print('This started at {}'.format(datetime.now().time()))
@@ -726,8 +747,9 @@ def one_time_get_test_objects(test_folder = '/Users/robin/COMP6223/cw3/testing',
                                                          sample_rate = 4)
     return a_patches_for_class, list_of_jpgs
 
-def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
-         cluster_num = 200, test_size = 0.4, run_num = 100, patch_size = 8, sample_rate = 4):
+
+def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 100,
+               patch_size = 8, sample_rate=4):
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_patches_of_each_image, ll_list_of_jpgs,
@@ -736,9 +758,11 @@ def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
                                                            sample_rate = sample_rate)
     print('Ended at {}'.format(datetime.now().time()))
 
+    np.save('order_of_classes.npy', order_of_classes)
+
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
-                                        sample_num = sample_num)
+                                        sample_num=sample_num)
 
     # Creating a codebook
     la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
@@ -756,37 +780,89 @@ def run2(test_folder = '/Users/robin/COMP6223/cw3/testing', sample_num = 2000,
     ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
                                       test_size = test_size, run_num = run_num)
 
-    joblib.dump(ovr, 'ovr.pkl')
-
     # Do box plots of accuracies training vs test
 
+    joblib.dump(ovr, 'ovr.pkl')
+
+    return neigh, ovr,
+
+
+def run2_test(neigh=None, ovr=None, order_of_classes=None,
+              test_folder='/Users/robin/COMP6223/cw3/testing', test_size=0.2,
+              run_num=10):
+
+    if neigh is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'neigh.pkl')
+        neigh = joblib.load(path)
+    if ovr is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'ovr.pkl')
+        ovr = joblib.load(path)
+    if order_of_classes is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'order_of_classes.npy')
+        order_of_classes = np.load(path)
+
+    # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
+    # To get the accuracy we need histograms and targets
+
+    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
+    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
+    #
+    # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
+    #                                   test_size=test_size, run_num=run_num)
+
+    # # Do box plots of the accuracy.
+    # acc_tr = np.array(acc_tr)
+    # acc_tst = np.array(acc_tst)
+    #
+    # data = [acc_tr, acc_tst]
+    # fig,ax1 = plt.subplots(figsize = (8,6))
+    # bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
+    # ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+    #                alpha=0.5)
+    # ax1.set_axisbelow(True)
+    # ax1.set_xlabel('Type of Error')
+    # ax1.set_ylabel('Accuracy')
+    #
+    # xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
+    # plt.setp(xticknames, fontsize=14)
+    # savefig('ovr_accuracy.png')
+
+    # Creating test data
+    [test_list_of_jpgs,
+     test_la_patches_of_each_image,
+     test_a_patches_for_class] = get_dense_patches_for_folder(test_folder,
+                                                              patch_size=8,
+                                                              sample_rate=4)
+
     # List for each of the test histograms
-    # test_list_of_histograms = []
-    #
-    # # Take the test data and work out it histogram
-    # for i in test_la_patches_of_each_image:
-    #     predicted_hist = find_histograms_for_images(neigh, i)
-    #     test_list_of_histograms.append(predicted_hist)
-    #
-    # test_histograms = np.vstack(test_list_of_histograms)
-    #
-    # predicted_class = ovr.predict(test_histograms)
-    # Construct test feature with
-    # test_out = clf.predict(test_array)
-    #
-    # write_output(test_list_of_jpgs, predicted_class, run_no = 2)
+    test_list_of_histograms = []
 
-    return [lla_patches_of_each_image, ll_list_of_jpgs,
-            la_patches_for_class, order_of_classes, la_list_of_samples,
-            la_list_of_centres, la_list_of_words]
+    # Take the test data and work out it histogram
+    for index, i in enumerate(test_la_patches_of_each_image):
+        predicted_hist = find_histograms_for_images(neigh, i, order_of_classes)
+        test_list_of_histograms.append(predicted_hist)
+        print("Finished element number {}".format(index))
 
-if __name__ == '__main__':
-    # if the commange line has three arguments then the images have been
-    # provided
-    if len(sys.argv) == 3:
-        image1 = sys.argv[1]
-        image2 = sys.argv[2]
-        run_hybrid(image1, image2)
-    else:
-        print("Usage: python hybrid_image.py image1 image2")
-        sys.exit()
+    print("Putting list together as array")
+    test_histograms = np.vstack(test_list_of_histograms)
+
+    # SAVE HERE!
+    print('About to save')
+    np.save('test_histograms.npy', test_histograms)
+
+    predicted_class = ovr.predict(test_histograms)
+
+    write_output(test_list_of_jpgs, predicted_class, run_no = 2)
+
+    return predicted_class
+
+# if __name__ == '__main__':
+#     # if the commange line has three arguments then the images have been
+#     # provided
+#     if len(sys.argv) == 3:
+#         image1 = sys.argv[1]
+#         image2 = sys.argv[2]
+#         run_hybrid(image1, image2)
+#     else:
+#         print("Usage: python hybrid_image.py image1 image2")
+#         sys.exit()
