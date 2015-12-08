@@ -3,29 +3,29 @@
 This script takes training data to create a classifier that then tries to classify
 a number of untrained images."""
 
+from datetime import datetime
+from glob import glob
+import matplotlib.pyplot as plt
 import numpy as np
+from os import getcwd
+from os.path import join, split #, exists, splitext
+
+from skimage.feature import daisy
 from skimage.io import imread, imsave
 from skimage.transform import resize
 from skimage.util import view_as_windows
-from glob import glob
-from sklearn.preprocessing import normalize
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn import metrics
-from sklearn.cross_validation import train_test_split
+
 from sklearn.cluster import KMeans
-from sklearn.multiclass import OneVsRestClassifier
-from sklearn.svm import LinearSVC
+from sklearn.cross_validation import train_test_split
 from sklearn.externals import joblib
-import matplotlib.pyplot as plt
-from os.path import join, split #, exists, splitext
-from os import getcwd
+from sklearn.multiclass import OneVsRestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import normalize
+from sklearn.svm import LinearSVC
+
 import sys
-from traceback import print_exc
-import pickle
-from datetime import datetime
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import savefig
+from traceback import print_exc
 
 
 def _dim(number):
@@ -331,6 +331,46 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
     return tr_acc, tst_acc, neigh
 
 
+def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
+    # Training the algorithm
+    X, y = training_tiny_image(export, pixels)
+
+    ma_trs = []
+    ma_tsts = []
+
+    # Doing a cross validation
+    for i in n_neighbors:
+        tr_acc, tst_acc, neigh = split_test_knn(X, np.ravel(y), n_neighbors = i,
+                                                run_num = run_num)
+        # find mse for training and test data
+        ma_tr = np.mean(tr_acc)
+        ma_tst = np.mean(tst_acc)
+
+        ma_trs.append(ma_tr)
+        ma_tsts.append(ma_tst)
+
+    # Calculating the optimum k where optimum is the max test accuracy
+    opt_k = n_neighbors[ma_tsts.index(max(ma_tsts))]
+
+    fig = plt.figure()
+    plt.plot(n_neighbors, ma_trs, n_neighbors, ma_tsts)
+    plt.xlabel('k value')
+    plt.ylabel('Accuracy')
+    plt.legend(['Training Accuracy', 'Test Accuracy'])
+    plt.savefig('k_vs_acc.jpg')
+
+    [neigh, a] = KNN(X, y, n_neighbors = opt_k)
+
+    # Now we've found the optimum k we shall try on the test data
+    test_array, list_of_files = create_tinys_array(test_folder)
+
+    test_out = neigh.predict(test_array)
+
+    write_output(list_of_files, test_out, run_no = 1)
+
+    return ma_trs, ma_tsts, acc, n_neighbors, test_out
+
+
 def get_dense_patches(image, patch_size = 8, sample_rate = 4):
     """Gets dense patches of pixels from an image.
 
@@ -389,13 +429,8 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     -------
     list_of_jpgs: list(String)
         ['0.jpg', '1.jpg', ..., '99.jpg']
-
-    list_of_files: list(String)
-        ['/Users/robin/COMP6223/cw3/training/bedroom/0.jpg', ...]
-
     la_patches_of_each_image: list(ndarray)
         [array_patches(0.jpg), array_patches(1.jpg), ...]
-
     a_patches_for_class: ndarray
         array_patches(bedroom)
     """
@@ -520,8 +555,8 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
         # Get the corresponding patch from la_patches_for_class (an array)
         a_patches_for_class = la_patches_for_class[index]
 
-        # Create an array of 500 random integers between 0 and
-        # len(patches_for_class)
+        # Create an array of sample_num random integers between 0 and
+        # len(a_patches_for_class)
         sample_index = np.random.randint(len(a_patches_for_class),size = sample_num)
 
         #Sample from the array using the indexes
@@ -612,7 +647,8 @@ def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
 
 
 def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
-                                    lla_patches_of_each_image, order_of_classes):
+                                    lla_patches_of_each_image, order_of_classes,
+                                    run_no):
     """Puts training data into a format so the histogram function can be run
 
     Parameters
@@ -652,7 +688,7 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
             la_list_of_histograms.append(histogram)
 
         print('Saved for %d' % order_of_classes[index])
-        np.save('%d.npy' % index, histogram)
+        np.save('run{}_{}.npy'.format(run_no, index), histogram)
 
     # Vstack these lists! These are the inputs to the linear classifier
     # We'll need to calculate these for the test and training data.
@@ -696,58 +732,6 @@ def one_vs_all(X, y, test_size = 0.4, run_num = 4):
     return ovr, acc_tr, acc_tst
 
 
-def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
-    # Training the algorithm
-    X, y = training_tiny_image(export, pixels)
-
-    ma_trs = []
-    ma_tsts = []
-
-    # Doing a cross validation
-    for i in n_neighbors:
-        tr_acc, tst_acc, neigh = split_test_knn(X, np.ravel(y), n_neighbors = i,
-                                                run_num = run_num)
-        # find mse for training and test data
-        ma_tr = np.mean(tr_acc)
-        ma_tst = np.mean(tst_acc)
-
-        ma_trs.append(ma_tr)
-        ma_tsts.append(ma_tst)
-
-    # Calculating the optimum k where optimum is the max test accuracy
-    opt_k = n_neighbors[ma_tsts.index(max(ma_tsts))]
-
-    fig = plt.figure()
-    plt.plot(n_neighbors, ma_trs, n_neighbors, ma_tsts)
-    plt.xlabel('k value')
-    plt.ylabel('Accuracy')
-    plt.legend(['Training Accuracy', 'Test Accuracy'])
-    plt.savefig('k_vs_acc.jpg')
-
-    [neigh, a] = KNN(X, y, n_neighbors = opt_k)
-
-    # Now we've found the optimum k we shall try on the test data
-    test_array, list_of_files = create_tinys_array(test_folder)
-
-    test_out = neigh.predict(test_array)
-
-    write_output(list_of_files, test_out, run_no = 1)
-
-    return ma_trs, ma_tsts, acc, n_neighbors, test_out
-
-
-def one_time_get_test_objects(test_folder = '/Users/robin/COMP6223/cw3/testing',
-                              patch_size = 8, sample_rate = 4):
-    print('This started at {}'.format(datetime.now().time()))
-    # We only need a_patches_for_class and list_of_jpgs
-    [list_of_jpgs,
-     la_patches_of_each_image,
-     a_patches_for_class] = get_dense_patches_for_folder(test_folder,
-                                                         patch_size = 8,
-                                                         sample_rate = 4)
-    return a_patches_for_class, list_of_jpgs
-
-
 def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 100,
                patch_size = 8, sample_rate=4):
 
@@ -773,7 +757,8 @@ def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 
      neigh] = get_training_data_for_histogram(la_list_of_centres,
                                               la_list_of_words,
                                               lla_patches_of_each_image,
-                                              order_of_classes)
+                                              order_of_classes,
+                                              run_no = 2)
 
     joblib.dump(neigh, 'neigh.pkl')
 
@@ -784,7 +769,7 @@ def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 
 
     joblib.dump(ovr, 'ovr.pkl')
 
-    return neigh, ovr,
+    return neigh, ovr, order_of_classes
 
 
 def run2_test(neigh=None, ovr=None, order_of_classes=None,
@@ -855,6 +840,347 @@ def run2_test(neigh=None, ovr=None, order_of_classes=None,
     write_output(test_list_of_jpgs, predicted_class, run_no = 2)
 
     return predicted_class
+
+
+def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
+                    orientations=8, visualize=False, normalization='daisy'):
+    """Calculates daisy descriptors and puts each in one row of an array.
+
+    The step size needs to be quite small to get as many descriptors for the
+    number to be as large as the dense patches.
+
+    Parameters
+    ----------
+    step: int (default: 4)
+        Distance between each sampling point
+    radius: in (default: 15)
+        radius of outermost ring in pixels
+    rings: int (default: 3)
+        Number of rings around sampling point
+    histograms: int (default: 6)
+        Number of "petals" in each ring
+    orientations: int (default: 6)
+        Number of orientations (directions) per histogram
+    visualize: bool (default: False)
+        If true creates a visualisation of the daisy on the image given
+    normalization: ['l1', 'l2', 'daisy', 'off'], (default: 'daisy')
+        What type of normalization to use. 'daisy' does the l2 norm for each
+        histogram
+
+    Returns
+    -------
+    out: ndarray
+        An array with each row corresponding to a daisy featurevector, which
+        has been normalized along the rows. For items created with the same
+        histograms, orientations and rings the width of this array will be
+        constant at (rings * histograms + 1) * orientations
+    """
+
+    if visualize:
+        descs, descs_img = daisy(image, step = step, radius=radius, rings=rings,
+                      histograms=histograms, orientations=orientations,
+                      visualize=visualize, normalization=normalization)
+
+        fig, ax = plt.subplots()
+        ax.axis('off')
+        ax.imshow(descs_img)
+        name = 'daisy_step{}_radius{}_rings{}.png'.format(step, radius, rings)
+        plt.savefig(name)
+    else:
+        descs = daisy(image, step = step, radius=radius, rings=rings,
+                      histograms=histograms, orientations=orientations,
+                      visualize=visualize, normalization=normalization)
+
+    # reshapes the daisy outputs so each pixels histogram is a row in an array.
+    # takes the "band" dimension and puts it at the front. shp should be of the
+    # format 40 x 40 x 152 (where the 40s are the spatial part of the image,
+    # making the 152 the histogram of each pixel, which we would like ravelled)
+    shp = descs.shape
+    descs_shaped = np.rollaxis(descs, 2)
+
+    # It has to be done like this otherwise the wrong elements will be in the
+    # wrong places and then transpose it.
+    out = descs_shaped.reshape((shp[2], shp[0]*shp[1])).T
+
+    # Normalize the data
+    m = out.mean(axis = 1)
+
+    # Have to transpose as it won't take subtract along columns properly
+    out = (np.transpose(out) - m).transpose()
+
+    # Make unit length along the rows
+    out = normalize(out, axis = 1)
+
+    return out
+
+
+def get_daisy_descs_for_folder(folder, step , radius, rings, histograms,
+                               orientations, visualize,normalization):
+    """Creates one array of daisy descriptors for every image in a folder.
+
+    Parameters
+    ----------
+    folder: String
+        folder with all jpgs
+    step: int (default: 4)
+        Distance between each sampling point
+    radius: in (default: 15)
+        radius of outermost ring in pixels
+    rings: int (default: 3)
+        Number of rings around sampling point
+    histograms: int (default: 6)
+        Number of "petals" in each ring
+    orientations: int (default: 6)
+        Number of orientations (directions) per histogram
+    visualize: bool (default: False)
+        If true creates a visualisation of the daisy on the image given
+    normalization: ['l1', 'l2', 'daisy', 'off'], (default: 'daisy')
+        What type of normalization to use. 'daisy' does the l2 norm for each
+        histogram
+
+    Returns
+    -------
+    list_of_jpgs: list(String)
+        ['0.jpg', '1.jpg', ..., '99.jpg']
+    la_patches_of_each_image: list(ndarray)
+        [array_patches(0.jpg), array_patches(1.jpg), ...]
+    a_patches_for_class: ndarray
+        array_patches(bedroom)
+
+    Start: 23:29:16 End: 23:29:56 0.5s to do one image!
+    """
+
+    # Get a list of all the jpegs in a folder
+    pattern = join(folder,'*.jpg')
+
+    list_of_files = glob(pattern)
+
+    list_of_jpgs = []
+
+    # Create empty list for patches to go in. Each item is an array for each
+    # image
+    la_daisy_of_each_image = []
+
+    # load in each jpg separately, create dense daisy descriptor array and add
+    # to an empty list
+
+    for im in list_of_files:
+        # Create a String list of files e.g. ['0.jpg','1.jpg', ...]
+        [c, d] = split(im)
+        list_of_jpgs.append(d)
+        # import image into an array
+        image = image_to_array(im)
+        # create array of patches for each image
+        daisy = DAISY_extractor(image, step , radius, rings, histograms,
+                                orientations, visualize, normalization)
+        # append each array to list of images
+        la_daisy_of_each_image.append(daisy)
+        print('Finished image at {}'.format(datetime.now().time()))
+
+    # join all the arrays in the list using np.vstack,
+    # but we also need to have each individual image as a list ofor the future
+    # k nearest neighbor. the vstack is needed for sampling and the list
+    # is needed for the nearest neighbour after clustering.
+    a_daisy_for_class = np.vstack(la_daisy_of_each_image)
+
+    return list_of_jpgs, la_daisy_of_each_image, a_daisy_for_class
+
+
+def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientations,
+                                    visualize, normalization,
+                                    tr_folder = '/Users/robin/COMP6223/cw3/training'):
+    """Creates a matrix of all features for each class
+
+    Parameters
+    ----------
+    tr_folder: String (default: '/Users/robin/COMP6223/cw3/training')
+        A filepath to the folder containing all the other class folders.
+    step: int (default: 4)
+        Distance between each sampling point
+    radius: in (default: 15)
+        radius of outermost ring in pixels
+    rings: int (default: 3)
+        Number of rings around sampling point
+    histograms: int (default: 6)
+        Number of "petals" in each ring
+    orientations: int (default: 6)
+        Number of orientations (directions) per histogram
+    visualize: bool (default: False)
+        If true creates a visualisation of the daisy on the image given
+    normalization: ['l1', 'l2', 'daisy', 'off'], (default: 'daisy')
+        What type of normalization to use. 'daisy' does the l2 norm for each
+        histogram
+
+    Returns
+    -------
+    lla_daisy_of_each_image: list(list(ndarray))
+        lla_patches_of_each_image[0] = [array_patches(0.jpg), array_patches(1.jpg), ...]
+        where class is determined by order of class.
+
+    ll_list_of_jpgs: list(list(String))
+        ll_list_of_jpgs[0] = ['0.jpg', '1.jpg', ..., '99.jpg']
+        but this is in the order they were originally loaded.
+
+    la_daisy_for_class: list(ndarray)
+        la_patches_for_class[0] = [array_patches(bedroom), array_patches(coast), ...]
+        where class is determined by order of class.
+
+    order_of_classes: list(int)
+        order_of_classes in order it was loaded. i.e. [15,2,3,5, ...]
+    """
+
+    # Each class path
+    paths = [join(tr_folder, i) for i in image_folders]
+
+    # At the lowest level an array of patches for each image
+    lla_daisy_of_each_image = []
+
+    # At the lowest level strings of '0.jpg'
+    ll_list_of_jpgs = []
+
+    # At the lowest level an array of patches for each class (vstack of all images) - for sampling!
+    la_daisy_for_class = []
+
+    order_of_classes = []
+
+    for path in paths:
+
+        [list_of_jpgs,
+         la_daisy_of_each_image,
+         a_daisy_for_class] = get_daisy_descs_for_folder(path, step, radius,
+                                                         rings, histograms,
+                                                         orientations, visualize,
+                                                         normalization)
+
+        lla_daisy_of_each_image.append(la_daisy_of_each_image)
+
+        ll_list_of_jpgs.append(list_of_jpgs)
+
+        la_daisy_for_class.append(a_daisy_for_class)
+
+        # Create an order of classes
+        [c, d] = split(path)
+        class_num = image_classes_names[d]
+        order_of_classes.append(class_num)
+        print('Finished {} at {}'.format(d, datetime.now().time()))
+
+    return [lla_daisy_of_each_image, ll_list_of_jpgs,
+            la_daisy_for_class, order_of_classes]
+
+
+def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
+               step=4, radius=15, rings=3, histograms=6, orientations=8,
+               visualize=False, normalization='daisy'):
+    """Runs the daisy descriptor for all training images and calculates accuracy."""
+
+    print('This started at {}'.format(datetime.now().time()))
+    [lla_daisy_of_each_image, ll_list_of_jpgs,
+     la_daisy_for_class,
+     order_of_classes] = get_daisy_descs_for_all_classes(step = step, radius=radius,
+                   rings=rings, histograms=histograms, orientations=orientations,
+                   visualize=visualize, normalization=normalization)
+    print('Ended at {}'.format(datetime.now().time()))
+
+    np.save('run3_order_of_classes.npy', order_of_classes)
+
+    # From here on the code for run2 and run1 is almost identical!
+    # Sampling
+    la_list_of_samples = sample_patches(order_of_classes, la_daisy_for_class,
+                                        sample_num=sample_num)
+
+    # Creating a codebook
+    la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
+                                                         order_of_classes,
+                                                         cluster_num = cluster_num)
+
+    [histograms, targets,
+     neigh] = get_training_data_for_histogram(la_list_of_centres,
+                                              la_list_of_words,
+                                              lla_daisy_of_each_image,
+                                              order_of_classes,
+                                              run_no = 3)
+
+    joblib.dump(neigh, 'run3_neigh.pkl')
+
+    ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
+                                      test_size = test_size, run_num = run_num)
+
+    # Do box plots of accuracies training vs test
+
+    joblib.dump(ovr, 'run3_ovr.pkl')
+
+    return neigh, ovr, order_of_classes
+
+def run3_test(neigh=None, ovr=None, order_of_classes=None, step = 4, radius=15,
+              rings=3, histograms=6, orientations=8, visualize=False,
+              normalization='daisy'):
+    """Runs the daisy descriptor run for all test images."""
+
+    if neigh is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'run3_neigh.pkl')
+        neigh = joblib.load(path)
+    if ovr is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'run3_ovr.pkl')
+        ovr = joblib.load(path)
+    if order_of_classes is None:
+        path = join('/Users/robin/COMP6223/cw3/', 'run3_order_of_classes.npy')
+        order_of_classes = np.load(path)
+
+    # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
+    # To get the accuracy we need histograms and targets
+
+    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
+    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
+    #
+    # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
+    #                                   test_size=test_size, run_num=run_num)
+
+    # # Do box plots of the accuracy.
+    # acc_tr = np.array(acc_tr)
+    # acc_tst = np.array(acc_tst)
+    #
+    # data = [acc_tr, acc_tst]
+    # fig,ax1 = plt.subplots(figsize = (8,6))
+    # bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
+    # ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+    #                alpha=0.5)
+    # ax1.set_axisbelow(True)
+    # ax1.set_xlabel('Type of Error')
+    # ax1.set_ylabel('Accuracy')
+    #
+    # xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
+    # plt.setp(xticknames, fontsize=14)
+    # savefig('ovr_accuracy.png')
+
+    # Creating test data
+    [test_list_of_jpgs,
+     test_la_patches_of_each_image,
+     test_a_patches_for_class] = get_dense_patches_for_folder(test_folder,
+                                                              patch_size=8,
+                                                              sample_rate=4)
+
+    # List for each of the test histograms
+    test_list_of_histograms = []
+
+    # Take the test data and work out it histogram
+    for index, i in enumerate(test_la_patches_of_each_image):
+        predicted_hist = find_histograms_for_images(neigh, i, order_of_classes)
+        test_list_of_histograms.append(predicted_hist)
+        print("Finished element number {}".format(index))
+
+    print("Putting list together as array")
+    test_histograms = np.vstack(test_list_of_histograms)
+
+    # SAVE HERE!
+    print('About to save')
+    np.save('test_histograms.npy', test_histograms)
+
+    predicted_class = ovr.predict(test_histograms)
+
+    write_output(test_list_of_jpgs, predicted_class, run_no = 2)
+
+    return predicted_class
+
 
 # if __name__ == '__main__':
 #     # if the commange line has three arguments then the images have been
