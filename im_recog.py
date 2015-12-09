@@ -254,7 +254,7 @@ def write_output(glob_list, y, run_no):
     return out_path
 
 
-def training_tiny_image(tr_folder='/Users/robin/COMP6223/cw3/training', pixels=16,
+def training_tiny_image(tr_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training', pixels=16,
                         export=False):
     print(image_folders, tr_folder)
     paths = [join(tr_folder, i) for i in image_folders]
@@ -329,8 +329,8 @@ def split_test_knn(X, y, n_neighbors=5, test_size=0.2, run_num=100, run_no=1):
     return tr_acc, tst_acc, neigh
 
 
-def run1(tr_folder='/Users/robin/COMP6223/cw3/training',
-         test_folder='/Users/robin/COMP6223/cw3/testing',
+def run1(tr_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training',
+         test_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\testing',
          n_neighbors=[5], pixels=16, export=False, run_num=100, test_size=0.2):
 
     run_no = 1
@@ -475,7 +475,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
 
 
-def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/training',
+def get_dense_patches_for_all_classes(tr_folder = 'C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training',
                                       patch_size = 8, sample_rate = 4):
     """Creates a matrix of all features for each class
 
@@ -995,6 +995,7 @@ def get_daisy_descs_for_folder(folder, step, radius, rings, num_histograms,
                                 num_histograms=num_histograms,
                                 orientations=orientations, visualize=visualize,
                                 normalization=normalization)
+        print(len(daisy))
         # append each array to list of images
         la_daisy_of_each_image.append(daisy)
         print('Finished image at {}'.format(datetime.now().time()))
@@ -1010,7 +1011,7 @@ def get_daisy_descs_for_folder(folder, step, radius, rings, num_histograms,
 
 def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orientations,
                                     visualize, normalization,
-                                    tr_folder = '/Users/robin/COMP6223/cw3/training'):
+                                    tr_folder = 'C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training'):
     """Creates a matrix of all features for each class
 
     Parameters
@@ -1066,6 +1067,7 @@ def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orienta
     order_of_classes = []
 
     for path in paths:
+        print(path)
 
         [list_of_jpgs,
          la_daisy_of_each_image,
@@ -1107,11 +1109,10 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                    visualize=visualize, normalization=normalization)
     print('Ended at {}'.format(datetime.now().time()))
 
-    joblib.dump('run3_lla_daisy_of_each_image.npy', lla_daisy_of_each_image)
-    joblib.dump('run3_la_daisy_for_class.npy', lla_daisy_of_each_image)
-    joblib.dump('run3_ll_list_of_jpgs.npy', ll_list_of_jpgs)
-
-    joblib.dump('run3_order_of_classes.npy', order_of_classes)
+    joblib.dump(lla_daisy_of_each_image, 'run3_lla_daisy_of_each_image.npy')
+    joblib.dump(la_daisy_for_class, 'run3_la_daisy_for_class.npy')
+    joblib.dump(ll_list_of_jpgs, 'run3_ll_list_of_jpgs.npy')
+    joblib.dump(order_of_classes, 'run3_order_of_classes.npy')
 
     # From here on the code for run2 and run1 is almost identical!
     # Sampling
@@ -1122,7 +1123,7 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                                             sample_num=sample_num)
         lla_list_of_samples.append(la_list_of_samples)
 
-    joblib.dump('run3_lla_list_of_samples.npy', lla_list_of_samples)
+    joblib.dump(lla_list_of_samples, 'run3_lla_list_of_samples.npy')
 
     # Creating a codebook
     for index, la_list_of_samples in enumerate(lla_list_of_samples):
@@ -1136,7 +1137,7 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
         joblib.dump(la_list_of_centres, centre_name)
         joblib.dump(la_list_of_words, word_name)
 
-    ks = [1, 3]
+    ks = [5]
 
     for index, i in enumerate(centres_names):
         la_list_of_centres = joblib.load(i)
