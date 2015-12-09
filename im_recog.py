@@ -1092,7 +1092,7 @@ def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orienta
 
 def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                step=4, radius=15, rings=3, num_histograms=6, orientations=8,
-               visualize=False, normalization='daisy', k=1):
+               visualize=False, normalization='daisy'):
     """Runs the daisy descriptor for all training images and calculates accuracy."""
 
     lla_list_of_samples = []
@@ -1107,11 +1107,11 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                    visualize=visualize, normalization=normalization)
     print('Ended at {}'.format(datetime.now().time()))
 
-    joblib.dump('run3_lla_daisy_of_each_image.npy', lla_daisy_of_each_image)
-    joblib.dump('run3_la_daisy_for_class.npy', lla_daisy_of_each_image)
-    joblib.dump('run3_ll_list_of_jpgs.npy', ll_list_of_jpgs)
+    joblib.dump(lla_daisy_of_each_image, 'run3_lla_daisy_of_each_image.npy')
+    joblib.dump(lla_daisy_of_each_image, 'run3_la_daisy_for_class.npy')
+    joblib.dump(ll_list_of_jpgs, 'run3_ll_list_of_jpgs.npy')
 
-    joblib.dump('run3_order_of_classes.npy', order_of_classes)
+    joblib.dump(order_of_classes, 'run3_order_of_classes.npy')
 
     # From here on the code for run2 and run1 is almost identical!
     # Sampling
@@ -1120,9 +1120,10 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
     for sample_num in sample_nums:
         la_list_of_samples = sample_patches(order_of_classes, la_daisy_for_class,
                                             sample_num=sample_num)
+
         lla_list_of_samples.append(la_list_of_samples)
 
-    joblib.dump('run3_lla_list_of_samples.npy', lla_list_of_samples)
+    joblib.dump(lla_list_of_samples, 'run3_lla_list_of_samples.npy')
 
     # Creating a codebook
     for index, la_list_of_samples in enumerate(lla_list_of_samples):
