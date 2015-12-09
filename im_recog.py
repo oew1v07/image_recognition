@@ -699,8 +699,8 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     targets = np.vstack(la_list_of_targets)
 
     print('About to save')
-    np.save('histograms.npy', histograms)
-    np.save('targets.npy', targets)
+    np.save('run{}_histograms.npy', histograms)
+    np.save('run{}_targets.npy', targets)
 
     return histograms, targets, neigh
 
@@ -1105,7 +1105,6 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
     ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
                                       test_size = test_size, run_num = run_num)
 
-    # Do box plots of accuracies training vs test
 
     joblib.dump(ovr, 'run3_ovr.pkl')
 
