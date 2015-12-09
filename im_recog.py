@@ -1174,7 +1174,6 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
 
     versions = ['k_1_sample_500', 'k_1_sample_1000', 'k_1_sample_2000',
                 'k_3_sample_500', 'k_3_sample_1000', 'k_3_sample_2000']
-    run_no = 3
 
     # Stuff that should be done outside for loop
     order_of_classes_name = 'run3_order_of_classes.npy'
@@ -1204,10 +1203,9 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
         target_path = join(base_folder, target_name)
         targets = np.load(target_path)
 
-        target_name = 'run3_targets_' + i + '.npy'
-        target_path = join(base_folder, target_name)
-        targets = np.load(target_path)
-        'run3_neigh_k_{}_sample_{}.pkl'
+        neigh_name = 'run3_neigh_' + i + '.pkl'
+        neigh_path = join(base_folder, neigh_name)
+        neigh = joblib.load(target_path)
 
         ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
                                                        test_size=test_size,
@@ -1243,22 +1241,28 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
         # List for each of the test histograms
         test_list_of_histograms = []
 
-    # Take the test data and work out it histogram
-    for index, i in enumerate(test_la_daisy_of_each_image):
-        predicted_hist = find_histograms_for_images(neigh, i, order_of_classes)
-        test_list_of_histograms.append(predicted_hist)
-        print("Finished element number {}".format(index))
+        # Take the test data and work out it histogram
+        for index_2, j in enumerate(test_la_daisy_of_each_image):
+            predicted_hist = find_histograms_for_images(neigh, j, order_of_classes)
+            test_list_of_histograms.append(predicted_hist)
+            print("Finished element number {}".format(index_2))
 
-    print("Putting list together as array")
-    test_histograms = np.vstack(test_list_of_histograms)
+        print("Putting list together as array")
+        test_histograms = np.vstack(test_list_of_histograms)
 
-    # SAVE HERE!
-    print('About to save')
-    np.save('run{}_test_histograms.npy'.format(run_no), test_histograms)
+        # SAVE HERE!
+        print('About to save')
+        np.save('run3_test_histograms_k_{}_sample_{}.npy'.format(ks[index], samples[index]),
+                test_histograms)
 
-    predicted_class = ovr.predict(test_histograms)
+        predicted_class = ovr.predict(test_histograms)
 
-    write_output(test_list_of_jpgs, predicted_class, run_no=3)
+        np.save('run3_test_pred_class_k_{}_sample_{}.npy'.format(ks[index], samples[index]),
+                predicted_class)
+
+        write_output(test_list_of_jpgs,
+                     predicted_class,
+                     run_no='3_k_{}_sample_{}'.format(ks[index], samples[index]))
 
     return predicted_class
 
