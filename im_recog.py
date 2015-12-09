@@ -743,7 +743,7 @@ def one_vs_all(X, y, test_size=0.4, run_num=4, svm_type='linear'):
     return ovr, acc_tr, acc_tst, full_tr_acc
 
 
-def run2_train(sample_num=2000, cluster_num=200, test_size=0.2, run_num=100,
+def run2_train(sample_num=500, cluster_num=200, test_size=0.2, run_num=100,
                patch_size=8, sample_rate=4):
 
     print('This started at {}'.format(datetime.now().time()))
@@ -755,16 +755,22 @@ def run2_train(sample_num=2000, cluster_num=200, test_size=0.2, run_num=100,
 
     joblib.dump(lla_patches_of_each_image, 'run2_lla_patches_of_each_image.npy')
     joblib.dump(la_patches_for_class, 'run2_la_patches_for_class.npy')
+    joblib.dump(ll_list_of_jpgs, 'run2_ll_list_of_jpgs.npy')
     np.save('run2_order_of_classes.npy', order_of_classes)
 
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
                                         sample_num=sample_num)
 
+    joblib.dump(la_list_of_samples, 'run2_list_of_samples.npy')
+
     # Creating a codebook
     la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
                                                          order_of_classes,
                                                          cluster_num=cluster_num)
+
+    joblib.dump(la_list_of_centres, 'run2_la_list_of_centres.npy')
+    joblib.dump(la_list_of_words, 'run2_la_list_of_words.npy')
 
     [histograms, targets,
      neigh] = get_training_data_for_histogram(la_list_of_centres,
@@ -774,65 +780,62 @@ def run2_train(sample_num=2000, cluster_num=200, test_size=0.2, run_num=100,
                                               run_no=2)
 
     joblib.dump(neigh, 'run2_neigh.pkl')
+    np.save('run2_histograms.npy', histograms)
+    np.save('run2_targets.npy', histograms)
 
-    ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
-                                                   test_size=test_size,
-                                                   run_num=run_num,
-                                                   svm_type='linear')
-
-    # Do box plots of accuracies training vs test
-
-    joblib.dump(ovr, 'run2_ovr.pkl')
-
-    return neigh, ovr, order_of_classes
+    return neigh, order_of_classes
 
 
 def run2_test(neigh=None, ovr=None, order_of_classes=None,
               test_folder='/Users/robin/COMP6223/cw3/testing', test_size=0.2,
-              run_num=100):
+              run_num=100, graphs=False):
+
+    base_folder = '/Users/robin/COMP6223/cw3/'
 
     if neigh is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run2_neigh.pkl')
+        path = join(base_folder, 'run2_neigh.pkl')
         neigh = joblib.load(path)
-    if ovr is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run2_ovr.pkl')
-        ovr = joblib.load(path)
     if order_of_classes is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run2_order_of_classes.npy')
+        path = join(base_folder, 'run2_order_of_classes.npy')
         order_of_classes = np.load(path)
 
-    # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
+
     # To get the accuracy we need histograms and targets
 
-    histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'run2_histograms.npy'))
-    targets = np.load(join('/Users/robin/COMP6223/cw3/', 'run2_targets.npy'))
+    histograms = np.load(join(base_folder, 'run2_histograms.npy'))
+    targets = np.load(join(base_folder, 'run2_targets.npy'))
 
     ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
                                                    test_size=test_size,
                                                    run_num=run_num,
                                                    svm_type='linear')
 
+    joblib.dump(ovr, 'run2_ovr.pkl')
+
     # Do box plots of the accuracy.
     acc_tr = np.array(acc_tr)
     acc_tst = np.array(acc_tst)
+    full_tr_acc = np.array(full_tr_acc)
 
     # Saving accuracies
-    np.save('run2_acc_tr', acc_tr)
-    np.save('run2_acc_tst', acc_tst)
-    np.save('run2_full_tr_acc', full_tr_acc)
+    np.save('run2_acc_tr.npy', acc_tr)
+    np.save('run2_acc_tst.npy', acc_tst)
+    np.save('run2_full_tr_acc.npy', full_tr_acc)
 
-    data = [acc_tr, acc_tst]
-    fig,ax1 = plt.subplots(figsize=(8,6))
-    bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
-    ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-                   alpha=0.5)
-    ax1.set_axisbelow(True)
-    ax1.set_xlabel('Type of Error')
-    ax1.set_ylabel('Accuracy')
+    if graphs:
+        # Do box plots of accuracies training vs test
+        data = [acc_tr, acc_tst]
+        fig, ax1 = plt.subplots(figsize=(8, 6))
+        plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
+        ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                       alpha=0.5)
+        ax1.set_axisbelow(True)
+        ax1.set_xlabel('Type of Error')
+        ax1.set_ylabel('Accuracy')
 
-    xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
-    plt.setp(xticknames, fontsize=14)
-    plt.savefig('ovr_accuracy.png')
+        xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
+        plt.setp(xticknames, fontsize=14)
+        plt.savefig('run2_ovr_accuracy.png')
 
     # Creating test data
     [test_list_of_jpgs,
@@ -840,6 +843,10 @@ def run2_test(neigh=None, ovr=None, order_of_classes=None,
      test_a_patches_for_class] = get_dense_patches_for_folder(test_folder,
                                                               patch_size=8,
                                                               sample_rate=4)
+
+    joblib.dump(test_la_patches_of_each_image, 'run2_test_la_patches_of_each_image.npy')
+    joblib.dump(test_a_patches_for_class, 'run2_test_a_patches_for_class.npy')
+    joblib.dump(test_list_of_jpgs, 'run2_test_list_of_jpgs.npy')
 
     # List for each of the test histograms
     test_list_of_histograms = []
@@ -1236,7 +1243,7 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
 
             xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
             plt.setp(xticknames, fontsize=14)
-            plt.savefig('ovr_accuracy_k_{}_sample_{}.png'.format(ks[index], samples[index]))
+            plt.savefig('run3_ovr_accuracy_k_{}_sample_{}.png'.format(ks[index], samples[index]))
 
         # List for each of the test histograms
         test_list_of_histograms = []
