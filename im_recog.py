@@ -21,7 +21,7 @@ from sklearn.externals import joblib
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import normalize
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
 
 import sys
 from tqdm import tqdm
@@ -163,7 +163,7 @@ def create_tiny_image(image, pixels = 16):
     return tiny, out
 
 
-def create_tinys_array(folder, export = False, pixels = 16):
+def create_tinys_array(folder, export=False, pixels=16):
     """Creates an array of tiny images from images within a specified folder.
 
     Parameters
@@ -254,8 +254,10 @@ def write_output(glob_list, y, run_no):
     return out_path
 
 
-def training_tiny_image(export = False, pixels = 16):
-    paths = [join('/Users/robin/COMP6223/cw3/training', i) for i in image_folders]
+def training_tiny_image(tr_folder='/Users/robin/COMP6223/cw3/training', pixels=16,
+                        export=False):
+    print(image_folders, tr_folder)
+    paths = [join(tr_folder, i) for i in image_folders]
 
     length = len(paths)
 
@@ -266,14 +268,14 @@ def training_tiny_image(export = False, pixels = 16):
     start = 0
     chunk = 100
     for i in paths:
-        [c,d] = split(i)
+        [c, d] = split(i)
         class_num = image_classes_names[d]
         #no minus 1 as numpy arrays are exclusive at end.
         end_point = start + chunk
         array, list_of_files = create_tinys_array(i, export, pixels)
         # Put array into the big array for use in sklearn
-        tiny_images[start:end_point,:] = array
-        targets[start:end_point,:] = class_num*np.ones((100,1))
+        tiny_images[start:end_point, :] = array
+        targets[start:end_point, :] = class_num * np.ones((100, 1))
         start = start + chunk
     return tiny_images, targets
 
@@ -308,7 +310,7 @@ def KNN(X, y, n_neighbors = 5):
     return neigh, acc
 
 
-def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
+def split_test_knn(X, y, n_neighbors=5, test_size=0.2, run_num=100, run_no=1):
     tr_acc = []
     tst_acc = []
 
@@ -320,10 +322,6 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
         # Put training accuracy into dataframe
         tr_acc.append(acc_tr)
 
-        pred = neigh.predict(X_test)
-
-        #print(metrics.classification_report(y_test, pred))
-
         # Calculate the test accuracy
         acc_tst = neigh.score(X_test, y_test)
         tst_acc.append(acc_tst)
@@ -331,44 +329,51 @@ def split_test_knn(X, y, n_neighbors = 5, test_size = 0.4, run_num = 4):
     return tr_acc, tst_acc, neigh
 
 
-def run1(test_folder, n_neighbors = [5], pixels = 16, export = False, run_num =  4):
+def run1(tr_folder='/Users/robin/COMP6223/cw3/training',
+         test_folder='/Users/robin/COMP6223/cw3/testing',
+         n_neighbors=[5], pixels=16, export=False, run_num=100, test_size=0.2):
+
+    run_no = 1
     # Training the algorithm
-    X, y = training_tiny_image(export, pixels)
+    X, y = training_tiny_image(tr_folder, pixels, export)
 
     ma_trs = []
     ma_tsts = []
 
     # Doing a cross validation
     for i in n_neighbors:
-        tr_acc, tst_acc, neigh = split_test_knn(X, np.ravel(y), n_neighbors = i,
-                                                run_num = run_num)
+        tr_acc, tst_acc, neigh = split_test_knn(X, np.ravel(y), n_neighbors=i,
+                                                run_num=run_num, run_no=run_no,
+                                                test_size=test_size)
         # find mse for training and test data
         ma_tr = np.mean(tr_acc)
         ma_tst = np.mean(tst_acc)
 
         ma_trs.append(ma_tr)
         ma_tsts.append(ma_tst)
+        np.save('run{}_tr_acc_k_{}.npy'.format(run_no, i), tr_acc)
+        np.save('run{}_tst_acc_k_{}.npy'.format(run_no, i), tst_acc)
 
     # Calculating the optimum k where optimum is the max test accuracy
-    opt_k = n_neighbors[ma_tsts.index(max(ma_tsts))]
+    opt_k = n_neighbors[np.argmax(ma_tsts)]
 
-    fig = plt.figure()
+    plt.figure()
     plt.plot(n_neighbors, ma_trs, n_neighbors, ma_tsts)
     plt.xlabel('k value')
     plt.ylabel('Accuracy')
     plt.legend(['Training Accuracy', 'Test Accuracy'])
-    plt.savefig('k_vs_acc.jpg')
+    plt.savefig('run{}_k_vs_acc.png'.format(run_no))
 
-    [neigh, a] = KNN(X, y, n_neighbors = opt_k)
+    [neigh, a] = KNN(X, y, n_neighbors=opt_k)
 
     # Now we've found the optimum k we shall try on the test data
     test_array, list_of_files = create_tinys_array(test_folder)
 
     test_out = neigh.predict(test_array)
 
-    write_output(list_of_files, test_out, run_no = 1)
+    write_output(list_of_files, test_out, run_no)
 
-    return ma_trs, ma_tsts, acc, n_neighbors, test_out
+    return ma_trs, ma_tsts, n_neighbors, test_out
 
 
 def get_dense_patches(image, patch_size = 8, sample_rate = 4):
@@ -705,11 +710,16 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     return histograms, targets, neigh
 
 
-def one_vs_all(X, y, test_size = 0.4, run_num = 4):
+def one_vs_all(X, y, test_size=0.4, run_num=4, svm_type='linear'):
     """Trains 15 1 vs all SVM linear classifiers"""
     # Python has a wonderful wrapper function that creates 1 vs all classifiers!
+    if type == 'linear':
+        estimator = LinearSVC()
+    else:
+        # This will automatically use RBF functions
+        estimator = SVC()
 
-    ovr = OneVsRestClassifier(estimator = LinearSVC())
+    ovr = OneVsRestClassifier(estimator=estimator)
 
     acc_tr = []
     acc_tst = []
@@ -729,20 +739,26 @@ def one_vs_all(X, y, test_size = 0.4, run_num = 4):
         acc_tr.append(tr_acc)
         acc_tst.append(tst_acc)
 
-    return ovr, acc_tr, acc_tst
+    # Put all training items in here for the final ovr
+    ovr = OneVsRestClassifier(estimator=LinearSVC())
+    ovr.fit(X, y.ravel())
+
+    full_tr_acc = ovr.score(X, y.ravel())
+
+    return ovr, acc_tr, acc_tst, full_tr_acc
 
 
-def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 100,
-               patch_size = 8, sample_rate=4):
+def run2_train(sample_num=2000, cluster_num=200, test_size=0.2, run_num=100,
+               patch_size=8, sample_rate=4):
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_patches_of_each_image, ll_list_of_jpgs,
      la_patches_for_class,
-     order_of_classes] = get_dense_patches_for_all_classes(patch_size = patch_size,
-                                                           sample_rate = sample_rate)
+     order_of_classes] = get_dense_patches_for_all_classes(patch_size=patch_size,
+                                                           sample_rate=sample_rate)
     print('Ended at {}'.format(datetime.now().time()))
 
-    np.save('order_of_classes.npy', order_of_classes)
+    np.save('run2_order_of_classes.npy', order_of_classes)
 
     # Sampling
     la_list_of_samples = sample_patches(order_of_classes, la_patches_for_class,
@@ -751,66 +767,75 @@ def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 
     # Creating a codebook
     la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
                                                          order_of_classes,
-                                                         cluster_num = cluster_num)
+                                                         cluster_num=cluster_num)
 
     [histograms, targets,
      neigh] = get_training_data_for_histogram(la_list_of_centres,
                                               la_list_of_words,
                                               lla_patches_of_each_image,
                                               order_of_classes,
-                                              run_no = 2)
+                                              run_no=2)
 
-    joblib.dump(neigh, 'neigh.pkl')
+    joblib.dump(neigh, 'run2_neigh.pkl')
 
-    ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
-                                      test_size = test_size, run_num = run_num)
+    ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
+                                                   test_size=test_size,
+                                                   run_num=run_num,
+                                                   svm_type='linear')
 
     # Do box plots of accuracies training vs test
 
-    joblib.dump(ovr, 'ovr.pkl')
+    joblib.dump(ovr, 'run2_ovr.pkl')
 
     return neigh, ovr, order_of_classes
 
 
 def run2_test(neigh=None, ovr=None, order_of_classes=None,
               test_folder='/Users/robin/COMP6223/cw3/testing', test_size=0.2,
-              run_num=10):
+              run_num=100):
 
     if neigh is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'neigh.pkl')
+        path = join('/Users/robin/COMP6223/cw3/', 'run2_neigh.pkl')
         neigh = joblib.load(path)
     if ovr is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'ovr.pkl')
+        path = join('/Users/robin/COMP6223/cw3/', 'run2_ovr.pkl')
         ovr = joblib.load(path)
     if order_of_classes is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'order_of_classes.npy')
+        path = join('/Users/robin/COMP6223/cw3/', 'run2_order_of_classes.npy')
         order_of_classes = np.load(path)
 
     # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
     # To get the accuracy we need histograms and targets
 
-    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
-    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
-    #
-    # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
-    #                                   test_size=test_size, run_num=run_num)
+    histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'run2_histograms.npy'))
+    targets = np.load(join('/Users/robin/COMP6223/cw3/', 'run2_targets.npy'))
 
-    # # Do box plots of the accuracy.
-    # acc_tr = np.array(acc_tr)
-    # acc_tst = np.array(acc_tst)
-    #
-    # data = [acc_tr, acc_tst]
-    # fig,ax1 = plt.subplots(figsize = (8,6))
-    # bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
-    # ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-    #                alpha=0.5)
-    # ax1.set_axisbelow(True)
-    # ax1.set_xlabel('Type of Error')
-    # ax1.set_ylabel('Accuracy')
-    #
-    # xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
-    # plt.setp(xticknames, fontsize=14)
-    # savefig('ovr_accuracy.png')
+    ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
+                                                   test_size=test_size,
+                                                   run_num=run_num,
+                                                   svm_type='linear')
+
+    # Do box plots of the accuracy.
+    acc_tr = np.array(acc_tr)
+    acc_tst = np.array(acc_tst)
+
+    # Saving accuracies
+    np.save('run2_acc_tr', acc_tr)
+    np.save('run2_acc_tst', acc_tst)
+    np.save('run2_full_tr_acc', full_tr_acc)
+
+    data = [acc_tr, acc_tst]
+    fig,ax1 = plt.subplots(figsize=(8,6))
+    bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
+    ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                   alpha=0.5)
+    ax1.set_axisbelow(True)
+    ax1.set_xlabel('Type of Error')
+    ax1.set_ylabel('Accuracy')
+
+    xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
+    plt.setp(xticknames, fontsize=14)
+    plt.savefig('ovr_accuracy.png')
 
     # Creating test data
     [test_list_of_jpgs,
@@ -833,16 +858,16 @@ def run2_test(neigh=None, ovr=None, order_of_classes=None,
 
     # SAVE HERE!
     print('About to save')
-    np.save('test_histograms.npy', test_histograms)
+    np.save('run2_test_histograms.npy', test_histograms)
 
     predicted_class = ovr.predict(test_histograms)
 
-    write_output(test_list_of_jpgs, predicted_class, run_no = 2)
+    write_output(test_list_of_jpgs, predicted_class, run_no=2)
 
     return predicted_class
 
 
-def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
+def DAISY_extractor(image, step=4, radius=15, rings=3, num_histograms=6,
                     orientations=8, visualize=False, normalization='daisy'):
     """Calculates daisy descriptors and puts each in one row of an array.
 
@@ -857,7 +882,7 @@ def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
         radius of outermost ring in pixels
     rings: int (default: 3)
         Number of rings around sampling point
-    histograms: int (default: 6)
+    num_histograms: int (default: 6)
         Number of "petals" in each ring
     orientations: int (default: 6)
         Number of orientations (directions) per histogram
@@ -877,9 +902,9 @@ def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
     """
 
     if visualize:
-        descs, descs_img = daisy(image, step = step, radius=radius, rings=rings,
-                      histograms=histograms, orientations=orientations,
-                      visualize=visualize, normalization=normalization)
+        descs, descs_img = daisy(image, step=step, radius=radius, rings=rings,
+                                 histograms=num_histograms, orientations=orientations,
+                                 visualize=visualize, normalization=normalization)
 
         fig, ax = plt.subplots()
         ax.axis('off')
@@ -887,8 +912,8 @@ def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
         name = 'daisy_step{}_radius{}_rings{}.png'.format(step, radius, rings)
         plt.savefig(name)
     else:
-        descs = daisy(image, step = step, radius=radius, rings=rings,
-                      histograms=histograms, orientations=orientations,
+        descs = daisy(image, step=step, radius=radius, rings=rings,
+                      histograms=num_histograms, orientations=orientations,
                       visualize=visualize, normalization=normalization)
 
     # reshapes the daisy outputs so each pixels histogram is a row in an array.
@@ -914,8 +939,8 @@ def DAISY_extractor(image, step=4, radius=15, rings=3, histograms=6,
     return out
 
 
-def get_daisy_descs_for_folder(folder, step , radius, rings, histograms,
-                               orientations, visualize,normalization):
+def get_daisy_descs_for_folder(folder, step, radius, rings, num_histograms,
+                               orientations, visualize, normalization):
     """Creates one array of daisy descriptors for every image in a folder.
 
     Parameters
@@ -971,8 +996,10 @@ def get_daisy_descs_for_folder(folder, step , radius, rings, histograms,
         # import image into an array
         image = image_to_array(im)
         # create array of patches for each image
-        daisy = DAISY_extractor(image, step , radius, rings, histograms,
-                                orientations, visualize, normalization)
+        daisy = DAISY_extractor(image, step=step, radius=radius, rings=rings,
+                                num_histograms=num_histograms,
+                                orientations=orientations, visualize=visualize,
+                                normalization=normalization)
         # append each array to list of images
         la_daisy_of_each_image.append(daisy)
         print('Finished image at {}'.format(datetime.now().time()))
@@ -986,7 +1013,7 @@ def get_daisy_descs_for_folder(folder, step , radius, rings, histograms,
     return list_of_jpgs, la_daisy_of_each_image, a_daisy_for_class
 
 
-def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientations,
+def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orientations,
                                     visualize, normalization,
                                     tr_folder = '/Users/robin/COMP6223/cw3/training'):
     """Creates a matrix of all features for each class
@@ -1001,7 +1028,7 @@ def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientation
         radius of outermost ring in pixels
     rings: int (default: 3)
         Number of rings around sampling point
-    histograms: int (default: 6)
+    num_histograms: int (default: 6)
         Number of "petals" in each ring
     orientations: int (default: 6)
         Number of orientations (directions) per histogram
@@ -1048,7 +1075,7 @@ def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientation
         [list_of_jpgs,
          la_daisy_of_each_image,
          a_daisy_for_class] = get_daisy_descs_for_folder(path, step, radius,
-                                                         rings, histograms,
+                                                         rings, num_histograms,
                                                          orientations, visualize,
                                                          normalization)
 
@@ -1069,15 +1096,17 @@ def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientation
 
 
 def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
-               step=4, radius=15, rings=3, histograms=6, orientations=8,
+               step=4, radius=15, rings=3, num_histograms=6, orientations=8,
                visualize=False, normalization='daisy'):
     """Runs the daisy descriptor for all training images and calculates accuracy."""
+
+    run_no = 3
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_daisy_of_each_image, ll_list_of_jpgs,
      la_daisy_for_class,
-     order_of_classes] = get_daisy_descs_for_all_classes(step = step, radius=radius,
-                   rings=rings, histograms=histograms, orientations=orientations,
+     order_of_classes] = get_daisy_descs_for_all_classes(step=step, radius=radius,
+                   rings=rings, num_histograms=num_histograms, orientations=orientations,
                    visualize=visualize, normalization=normalization)
     print('Ended at {}'.format(datetime.now().time()))
 
@@ -1091,29 +1120,34 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
     # Creating a codebook
     la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
                                                          order_of_classes,
-                                                         cluster_num = cluster_num)
+                                                         cluster_num=cluster_num)
 
     [histograms, targets,
      neigh] = get_training_data_for_histogram(la_list_of_centres,
                                               la_list_of_words,
                                               lla_daisy_of_each_image,
                                               order_of_classes,
-                                              run_no = 3)
+                                              run_no=3)
 
     joblib.dump(neigh, 'run3_neigh.pkl')
 
     ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
-                                      test_size = test_size, run_num = run_num)
+                                      test_size=test_size, run_num=run_num,
+                                      svm_type='non-linear')
 
 
     joblib.dump(ovr, 'run3_ovr.pkl')
 
     return neigh, ovr, order_of_classes
 
-def run3_test(neigh=None, ovr=None, order_of_classes=None, step = 4, radius=15,
-              rings=3, histograms=6, orientations=8, visualize=False,
-              normalization='daisy'):
+
+def run3_test(neigh=None, ovr=None, order_of_classes=None, step=4, radius=15,
+              rings=3, num_histograms=6, orientations=8, visualize=False,
+              normalization='daisy', test_folder='/Users/robin/COMP6223/cw3/testing',
+              test_size=0.2, run_num=100):
     """Runs the daisy descriptor run for all test images."""
+
+    run_no = 3
 
     if neigh is None:
         path = join('/Users/robin/COMP6223/cw3/', 'run3_neigh.pkl')
@@ -1128,41 +1162,52 @@ def run3_test(neigh=None, ovr=None, order_of_classes=None, step = 4, radius=15,
     # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
     # To get the accuracy we need histograms and targets
 
-    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
-    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
-    #
-    # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
-    #                                   test_size=test_size, run_num=run_num)
+    histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'run3_histograms.npy'))
+    targets = np.load(join('/Users/robin/COMP6223/cw3/', 'run3_targets.npy'))
 
-    # # Do box plots of the accuracy.
-    # acc_tr = np.array(acc_tr)
-    # acc_tst = np.array(acc_tst)
-    #
-    # data = [acc_tr, acc_tst]
-    # fig,ax1 = plt.subplots(figsize = (8,6))
-    # bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
-    # ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
-    #                alpha=0.5)
-    # ax1.set_axisbelow(True)
-    # ax1.set_xlabel('Type of Error')
-    # ax1.set_ylabel('Accuracy')
-    #
-    # xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
-    # plt.setp(xticknames, fontsize=14)
-    # savefig('ovr_accuracy.png')
+    ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
+                                                   test_size=test_size,
+                                                   run_num=run_num,
+                                                   svm_type='non-linear')
+
+    # Do box plots of the accuracy.
+    acc_tr = np.array(acc_tr)
+    acc_tst = np.array(acc_tst)
+
+    # Saving accuracies
+    np.save('run3_acc_tr.npy', acc_tr)
+    np.save('run3_acc_tst.npy', acc_tst)
+    np.save('run3_full_tr_acc.npy', full_tr_acc)
+
+    data = [acc_tr, acc_tst]
+    fig, ax1 = plt.subplots(figsize = (8,6))
+    bp = plt.boxplot(data, notch=0, sym='+', vert=1, whis=1.5)
+    ax1.yaxis.grid(True, linestyle='-', which='major', color='lightgrey',
+                   alpha=0.5)
+    ax1.set_axisbelow(True)
+    ax1.set_xlabel('Type of Error')
+    ax1.set_ylabel('Accuracy')
+
+    xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
+    plt.setp(xticknames, fontsize=14)
+    plt.savefig('ovr_accuracy.png')
 
     # Creating test data
     [test_list_of_jpgs,
-     test_la_patches_of_each_image,
-     test_a_patches_for_class] = get_dense_patches_for_folder(test_folder,
-                                                              patch_size=8,
-                                                              sample_rate=4)
+     test_la_daisy_of_each_image,
+     test_a_daisy_for_class] = get_daisy_descs_for_folder(test_folder,
+                                                          step=step, radius=radius,
+                                                          rings=rings,
+                                                          num_histograms=num_histograms,
+                                                          orientations=orientations,
+                                                          visualize=visualize,
+                                                          normalization=normalization)
 
     # List for each of the test histograms
     test_list_of_histograms = []
 
     # Take the test data and work out it histogram
-    for index, i in enumerate(test_la_patches_of_each_image):
+    for index, i in enumerate(test_la_daisy_of_each_image):
         predicted_hist = find_histograms_for_images(neigh, i, order_of_classes)
         test_list_of_histograms.append(predicted_hist)
         print("Finished element number {}".format(index))
@@ -1172,13 +1217,18 @@ def run3_test(neigh=None, ovr=None, order_of_classes=None, step = 4, radius=15,
 
     # SAVE HERE!
     print('About to save')
-    np.save('test_histograms.npy', test_histograms)
+    np.save('run{}_test_histograms.npy'.format(run_no), test_histograms)
 
     predicted_class = ovr.predict(test_histograms)
 
-    write_output(test_list_of_jpgs, predicted_class, run_no = 2)
+    write_output(test_list_of_jpgs, predicted_class, run_no=3)
 
     return predicted_class
+
+
+def plot_accuracies(run1_tr_acc=None, run1_tst_acc=None, run2_tr_acc=None,
+                    run2_tst_acc=None, run3_tr_acc=None, run3_tst_acc=None):
+    pass
 
 
 # if __name__ == '__main__':
