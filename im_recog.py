@@ -7,7 +7,7 @@ from datetime import datetime
 from glob import glob
 import matplotlib.pyplot as plt
 import numpy as np
-from os import getcwd
+from os import getcwd, mkdir
 from os.path import join, split #, exists, splitext
 
 from skimage.feature import daisy
@@ -549,7 +549,7 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/tra
             la_patches_for_class, order_of_classes]
 
 
-def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
+def sample_patches(order_of_classes, la_patches_for_class, sample_num=500):
 
     # At the lowest level an array of patches from each class: 15 x 500 row array
     la_list_of_samples = []
@@ -562,7 +562,7 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
 
         # Create an array of sample_num random integers between 0 and
         # len(a_patches_for_class)
-        sample_index = np.random.randint(len(a_patches_for_class),size = sample_num)
+        sample_index = np.random.randint(len(a_patches_for_class), size = sample_num)
 
         #Sample from the array using the indexes
         sample = a_patches_for_class[sample_index,:]
@@ -570,10 +570,12 @@ def sample_patches(order_of_classes, la_patches_for_class, sample_num = 500):
         # Append to the list
         la_list_of_samples.append(sample)
 
+        print('Finished item {} at {}'.format(index, datetime.now()))
+
     return la_list_of_samples
 
 
-def find_clusters(la_list_of_samples, order_of_classes, cluster_num = 50):
+def find_clusters(la_list_of_samples, order_of_classes, cluster_num=50):
     """Creates the codebook to do linear classification on.
 
     This creates cluster_num x centres for each image class.
@@ -653,7 +655,7 @@ def find_histograms_for_images(neigh, patches_of_each_image, order_of_classes):
 
 def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
                                     lla_patches_of_each_image, order_of_classes,
-                                    run_no):
+                                    run_no, k):
     """Puts training data into a format so the histogram function can be run
 
     Parameters
@@ -673,7 +675,7 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     # a_words is the y
     a_words = np.vstack(la_list_of_words)
 
-    neigh, acc = KNN(a_centres, a_words, n_neighbors = 1)
+    neigh, acc = KNN(a_centres, a_words, n_neighbors=k)
 
     la_list_of_histograms = []
     la_list_of_targets = []
@@ -692,9 +694,6 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
             # Append to respective lists
             la_list_of_histograms.append(histogram)
 
-        print('Saved for %d' % order_of_classes[index])
-        np.save('run{}_{}.npy'.format(run_no, index), histogram)
-
     # Vstack these lists! These are the inputs to the linear classifier
     # We'll need to calculate these for the test and training data.
     # This is the X for the linear classifier
@@ -702,10 +701,6 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
 
     # This is the y for the linear classifier
     targets = np.vstack(la_list_of_targets)
-
-    print('About to save')
-    np.save('run{}_histograms.npy', histograms)
-    np.save('run{}_targets.npy', targets)
 
     return histograms, targets, neigh
 
@@ -1097,10 +1092,12 @@ def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orienta
 
 def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                step=4, radius=15, rings=3, num_histograms=6, orientations=8,
-               visualize=False, normalization='daisy'):
+               visualize=False, normalization='daisy', k=1):
     """Runs the daisy descriptor for all training images and calculates accuracy."""
 
-    run_no = 3
+    lla_list_of_samples = []
+    centres_names = []
+    words_names = []
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_daisy_of_each_image, ll_list_of_jpgs,
@@ -1110,35 +1107,56 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                    visualize=visualize, normalization=normalization)
     print('Ended at {}'.format(datetime.now().time()))
 
-    np.save('run3_order_of_classes.npy', order_of_classes)
+    joblib.dump('run3_lla_daisy_of_each_image.npy', lla_daisy_of_each_image)
+    joblib.dump('run3_la_daisy_for_class.npy', lla_daisy_of_each_image)
+    joblib.dump('run3_ll_list_of_jpgs.npy', ll_list_of_jpgs)
+
+    joblib.dump('run3_order_of_classes.npy', order_of_classes)
 
     # From here on the code for run2 and run1 is almost identical!
     # Sampling
-    la_list_of_samples = sample_patches(order_of_classes, la_daisy_for_class,
-                                        sample_num=sample_num)
+    sample_nums = [500, 1000, 2000]
+
+    for sample_num in sample_nums:
+        la_list_of_samples = sample_patches(order_of_classes, la_daisy_for_class,
+                                            sample_num=sample_num)
+        lla_list_of_samples.append(la_list_of_samples)
+
+    joblib.dump('run3_lla_list_of_samples.npy', lla_list_of_samples)
 
     # Creating a codebook
-    la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
-                                                         order_of_classes,
-                                                         cluster_num=cluster_num)
+    for index, la_list_of_samples in enumerate(lla_list_of_samples):
+        la_list_of_centres, la_list_of_words = find_clusters(la_list_of_samples,
+                                                             order_of_classes,
+                                                             cluster_num=cluster_num)
+        centre_name = 'run3_la_list_of_centres_sam_{}.npy'.format(sample_nums[index])
+        word_name = 'run3_la_list_of_words_sam_{}.npy'.format(sample_nums[index])
+        centres_names.append(centre_name)
+        words_names.append(word_name)
+        joblib.dump(la_list_of_centres, centre_name)
+        joblib.dump(la_list_of_words, word_name)
 
-    [histograms, targets,
-     neigh] = get_training_data_for_histogram(la_list_of_centres,
-                                              la_list_of_words,
-                                              lla_daisy_of_each_image,
-                                              order_of_classes,
-                                              run_no=3)
+    ks = [1, 3]
 
-    joblib.dump(neigh, 'run3_neigh.pkl')
+    for index, i in enumerate(centres_names):
+        la_list_of_centres = joblib.load(i)
+        la_list_of_words = joblib.load(words_names[index])
+        for k in ks:
+            [histograms, targets,
+             neigh] = get_training_data_for_histogram(la_list_of_centres,
+                                                      la_list_of_words,
+                                                      lla_daisy_of_each_image,
+                                                      order_of_classes,
+                                                      run_no=3, k=k)
 
-    ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
-                                      test_size=test_size, run_num=run_num,
-                                      svm_type='non-linear')
+            print('About to save')
+            np.save('run3_histograms_k_{}_sample_{}.npy'.format(k, sample_nums[index]),
+                    histograms)
+            np.save('run3_targets_k_{}_sample_{}.npy'.format(k, sample_nums[index]),
+                    targets)
+            joblib.dump(neigh, 'run3_neigh_k_{}_sample_{}.pkl'.format(k, sample_nums[index]))
 
-
-    joblib.dump(ovr, 'run3_ovr.pkl')
-
-    return neigh, ovr, order_of_classes
+    return neigh, order_of_classes
 
 
 def run3_test(neigh=None, ovr=None, order_of_classes=None, step=4, radius=15,
