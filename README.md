@@ -38,11 +38,10 @@ ipython
  ma_trs, ma_tsts, n_neighbors, test_out = run1()
  ```
   * To run run2 the training part and the test part have been split so the
-    filepaths have to be given.
+    filepaths have to be given. Run the second once the first has completed.
 ```
 run2_train(tr_folder='/Users/user/cw3/training')
 ```
-    then
 ```
 run2_test(test_folder='/Users/user/cw3/training', base_folder='/Users/user/cw3/)
 ```
