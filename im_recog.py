@@ -47,7 +47,7 @@ def _check_type(ar, data_types):
 image_classes_names = {'bedroom': 1, 'Coast': 2, 'Forest': 3, 'Highway': 4,
                        'industrial': 5, 'Insidecity': 6, 'kitchen': 7, 'livingroom': 8,
                        'Mountain': 9, 'Office': 10, 'OpenCountry': 11, 'store': 12,
-                       'Street':13, 'Suburb': 14, 'TallBuilding':15}
+                       'Street': 13, 'Suburb': 14, 'TallBuilding': 15}
 
 image_classes_int = {}
 
@@ -254,7 +254,7 @@ def write_output(glob_list, y, run_no):
     return out_path
 
 
-def training_tiny_image(tr_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training', pixels=16,
+def training_tiny_image(tr_folder='/Users/robin/COMP6223/cw3/training', pixels=16,
                         export=False):
     print(image_folders, tr_folder)
     paths = [join(tr_folder, i) for i in image_folders]
@@ -329,8 +329,8 @@ def split_test_knn(X, y, n_neighbors=5, test_size=0.2, run_num=100, run_no=1):
     return tr_acc, tst_acc, neigh
 
 
-def run1(tr_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training',
-         test_folder='C:\\Users\\Robin Wilson\\COMP6223\\cw3\\testing',
+def run1(tr_folder='/Users/robin/COMP6223/cw3/training',
+         test_folder='/Users/robin/COMP6223/cw3/testing',
          n_neighbors=[5], pixels=16, export=False, run_num=100, test_size=0.2):
 
     run_no = 1
@@ -416,6 +416,35 @@ def get_dense_patches(image, patch_size = 8, sample_rate = 4):
 
     return out
 
+def visual_words(num_patches=5):
+    # Given a patch size of 8 we can reverse engineer a couple of the patches
+    # to be viewed.
+    image = image_to_array('/Users/robin/COMP6223/cw3/training/TallBuilding/0.jpg')
+
+    out = get_dense_patches(image)
+
+    subset = out[:num_patches, :]
+
+    padding = 2
+
+    width = (num_patches + 1) * padding + num_patches * 8
+    length = 2 * padding + 8
+
+    chunk = 8
+    out = np.zeros((length, width))
+
+    # Restore dimensions to each patch and put in an array
+    left = padding
+    top = padding
+    bottom = -padding
+
+    for i in range(num_patches):
+        right = left + chunk
+        patch = subset[i, :].reshape((8, 8))
+        out[top:bottom, left:right] = patch
+        left = right + padding
+
+    return out
 
 def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     """Creates one array of dense patches for every image in a folder.
@@ -475,7 +504,7 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
 
 
-def get_dense_patches_for_all_classes(tr_folder = 'C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training',
+def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/training',
                                       patch_size = 8, sample_rate = 4):
     """Creates a matrix of all features for each class
 
@@ -705,8 +734,8 @@ def get_training_data_for_histogram(la_list_of_centres, la_list_of_words,
     return histograms, targets, neigh
 
 
-def one_vs_all(X, y, test_size=0.4, run_num=4, svm_type='linear'):
-    """Trains 15 1 vs all SVM linear classifiers"""
+def one_vs_all(X, y, test_size=0.2, run_num = 100, svm_type='linear'):
+    """Trains 15 1 vs all SVM classifiers of specified type"""
     # Python has a wonderful wrapper function that creates 1 vs all classifiers!
     if type == 'linear':
         estimator = LinearSVC()
@@ -714,7 +743,7 @@ def one_vs_all(X, y, test_size=0.4, run_num=4, svm_type='linear'):
         # This will automatically use RBF functions
         estimator = SVC()
 
-    ovr = OneVsRestClassifier(estimator=estimator)
+    ovr = OneVsRestClassifier(estimator = estimator)
 
     acc_tr = []
     acc_tst = []
@@ -734,22 +763,19 @@ def one_vs_all(X, y, test_size=0.4, run_num=4, svm_type='linear'):
         acc_tr.append(tr_acc)
         acc_tst.append(tst_acc)
 
-    # Put all training items in here for the final ovr
-    ovr = OneVsRestClassifier(estimator=LinearSVC())
-    ovr.fit(X, y.ravel())
+        # All the data isn't used here as it tends to overtrain the classifier.
 
-    full_tr_acc = ovr.score(X, y.ravel())
-
-    return ovr, acc_tr, acc_tst, full_tr_acc
+    return ovr, acc_tr, acc_tst
 
 
 def run2_train(sample_num=500, cluster_num=200, test_size=0.2, run_num=100,
-               patch_size=8, sample_rate=4):
+               patch_size=8, sample_rate=4, tr_folder='/Users/robin/COMP6223/cw3/training'):
 
     print('This started at {}'.format(datetime.now().time()))
     [lla_patches_of_each_image, ll_list_of_jpgs,
      la_patches_for_class,
-     order_of_classes] = get_dense_patches_for_all_classes(patch_size=patch_size,
+     order_of_classes] = get_dense_patches_for_all_classes(tr_folder=tr_folder,
+                                                           patch_size=patch_size,
                                                            sample_rate=sample_rate)
     print('Ended at {}'.format(datetime.now().time()))
 
@@ -788,9 +814,7 @@ def run2_train(sample_num=500, cluster_num=200, test_size=0.2, run_num=100,
 
 def run2_test(neigh=None, ovr=None, order_of_classes=None,
               test_folder='/Users/robin/COMP6223/cw3/testing', test_size=0.2,
-              run_num=100, graphs=False):
-
-    base_folder = '/Users/robin/COMP6223/cw3/'
+              run_num=100, graphs=False, base_folder='/Users/robin/COMP6223/cw3/'):
 
     if neigh is None:
         path = join(base_folder, 'run2_neigh.pkl')
@@ -1004,7 +1028,6 @@ def get_daisy_descs_for_folder(folder, step, radius, rings, num_histograms,
                                 num_histograms=num_histograms,
                                 orientations=orientations, visualize=visualize,
                                 normalization=normalization)
-        print(len(daisy))
         # append each array to list of images
         la_daisy_of_each_image.append(daisy)
         print('Finished image at {}'.format(datetime.now().time()))
@@ -1020,7 +1043,7 @@ def get_daisy_descs_for_folder(folder, step, radius, rings, num_histograms,
 
 def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orientations,
                                     visualize, normalization,
-                                    tr_folder = 'C:\\Users\\Robin Wilson\\COMP6223\\cw3\\training'):
+                                    tr_folder = '/Users/robin/COMP6223/cw3/training'):
     """Creates a matrix of all features for each class
 
     Parameters
@@ -1076,7 +1099,6 @@ def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orienta
     order_of_classes = []
 
     for path in paths:
-        print(path)
 
         [list_of_jpgs,
          la_daisy_of_each_image,
@@ -1103,7 +1125,8 @@ def get_daisy_descs_for_all_classes(step, radius, rings, num_histograms, orienta
 
 def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
                step=4, radius=15, rings=3, num_histograms=6, orientations=8,
-               visualize=False, normalization='daisy'):
+               visualize=False, normalization='daisy',
+               tr_folder='/Users/robin/COMP6223/cw3/training'):
     """Runs the daisy descriptor for all training images and calculates accuracy."""
 
     lla_list_of_samples = []
@@ -1113,18 +1136,19 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
     print('This started at {}'.format(datetime.now().time()))
     [lla_daisy_of_each_image, ll_list_of_jpgs,
      la_daisy_for_class,
-     order_of_classes] = get_daisy_descs_for_all_classes(step=step, radius=radius,
-                   rings=rings, num_histograms=num_histograms, orientations=orientations,
-                   visualize=visualize, normalization=normalization)
+     order_of_classes] = get_daisy_descs_for_all_classes(tr_folder=tr_folder,
+                                                         step=step, radius=radius,
+                                                         rings=rings,
+                                                         num_histograms=num_histograms,
+                                                         orientations=orientations,
+                                                         visualize=visualize,
+                                                         normalization=normalization)
     print('Ended at {}'.format(datetime.now().time()))
 
     joblib.dump(lla_daisy_of_each_image, 'run3_lla_daisy_of_each_image.npy')
     joblib.dump(la_daisy_for_class, 'run3_la_daisy_for_class.npy')
     joblib.dump(ll_list_of_jpgs, 'run3_ll_list_of_jpgs.npy')
-<<<<<<< HEAD
-=======
 
->>>>>>> de11ccf2fb077165225493c5a1405e6ebf872ffe
     joblib.dump(order_of_classes, 'run3_order_of_classes.npy')
 
     # From here on the code for run2 and run1 is almost identical!
@@ -1151,7 +1175,7 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
         joblib.dump(la_list_of_centres, centre_name)
         joblib.dump(la_list_of_words, word_name)
 
-    ks = [5]
+    ks = [1, 3]
 
     for index, i in enumerate(centres_names):
         la_list_of_centres = joblib.load(i)
@@ -1177,10 +1201,10 @@ def run3_train(sample_num=2000, cluster_num=200, test_size=0.4, run_num=100,
 def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visualize=False,
               normalization='daisy', test_folder='/Users/robin/COMP6223/cw3/testing',
               tr_folder='/Users/robin/COMP6223/cw3/training',
-              test_size=0.2, run_num=100, graphs=False):
+              test_size=0.2, run_num=100, graphs=False, svm_type='non_linear',
+              base_folder='/Users/robin/COMP6223/cw3/'):
     """Runs the daisy descriptor run for all test images."""
 
-    base_folder = '/Users/robin/COMP6223/cw3/'
     ks = [1, 1, 1, 3, 3, 3]
     samples = [500, 1000, 2000, 500, 1000, 2000]
 
@@ -1203,7 +1227,6 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
                                                           normalization=normalization)
 
     joblib.dump(test_la_daisy_of_each_image, 'run3_test_la_daisy_of_each_image.npy')
-    joblib.dump(test_a_daisy_for_class, 'run3_test_a_daisy_for_class.npy')
     joblib.dump(test_list_of_jpgs, 'run3_test_list_of_jpgs.npy')
 
     for index, i in enumerate(versions):
@@ -1217,12 +1240,12 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
 
         neigh_name = 'run3_neigh_' + i + '.pkl'
         neigh_path = join(base_folder, neigh_name)
-        neigh = joblib.load(target_path)
+        neigh = joblib.load(neigh_path)
 
         ovr, acc_tr, acc_tst, full_tr_acc = one_vs_all(histograms, targets,
                                                        test_size=test_size,
                                                        run_num=run_num,
-                                                       svm_type='non-linear')
+                                                       svm_type=svm_type)
 
         # Do box plots of the accuracy.
         acc_tr = np.array(acc_tr)
@@ -1248,7 +1271,7 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
 
             xticknames = plt.setp(ax1, xticklabels=['Training', 'Test'])
             plt.setp(xticknames, fontsize=14)
-            plt.savefig('run3_ovr_accuracy_k_{}_sample_{}.png'.format(ks[index], samples[index]))
+            #plt.savefig('run3_ovr_accuracy_k_{}_sample_{}.png'.format(ks[index], samples[index]))
 
         # List for each of the test histograms
         test_list_of_histograms = []
@@ -1277,20 +1300,3 @@ def run3_test(step=4, radius=15, rings=3, num_histograms=6, orientations=8, visu
                      run_no='3_k_{}_sample_{}'.format(ks[index], samples[index]))
 
     return predicted_class
-
-
-def plot_accuracies(run1_tr_acc=None, run1_tst_acc=None, run2_tr_acc=None,
-                    run2_tst_acc=None, run3_tr_acc=None, run3_tst_acc=None):
-    pass
-
-
-# if __name__ == '__main__':
-#     # if the commange line has three arguments then the images have been
-#     # provided
-#     if len(sys.argv) == 3:
-#         image1 = sys.argv[1]
-#         image2 = sys.argv[2]
-#         run_hybrid(image1, image2)
-#     else:
-#         print("Usage: python hybrid_image.py image1 image2")
-#         sys.exit()
