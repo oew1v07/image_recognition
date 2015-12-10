@@ -255,7 +255,7 @@ def write_output(glob_list, y, run_no):
 
 
 def training_tiny_image(export = False, pixels = 16):
-    paths = [join('/Users/robin/COMP6223/cw3/training', i) for i in image_folders]
+    paths = [join('/Users/olivia/COMP6223/cw3/training', i) for i in image_folders]
 
     length = len(paths)
 
@@ -470,13 +470,13 @@ def get_dense_patches_for_folder(folder, patch_size = 8, sample_rate = 4):
     return list_of_jpgs, la_patches_of_each_image, a_patches_for_class
 
 
-def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/training',
+def get_dense_patches_for_all_classes(tr_folder = '/Users/olivia/COMP6223/cw3/training',
                                       patch_size = 8, sample_rate = 4):
     """Creates a matrix of all features for each class
 
     Parameters
     ----------
-    tr_folder: String (default: '/Users/robin/COMP6223/cw3/training')
+    tr_folder: String (default: '/Users/olivia/COMP6223/cw3/training')
         A filepath to the folder containing all the other class folders.
     patch_size: int (default: 8)
         Size of each patch. 8 x 8 patches are recommended.
@@ -495,7 +495,7 @@ def get_dense_patches_for_all_classes(tr_folder = '/Users/robin/COMP6223/cw3/tra
         but this is in the order they were originally loaded.
 
     ll_list_of_files: list(list(String))
-        ll_list_of_files[0] = ['/Users/robin/COMP6223/cw3/training/bedroom/0.jpg', ...]
+        ll_list_of_files[0] = ['/Users/olivia/COMP6223/cw3/training/bedroom/0.jpg', ...]
         in the order they were originally loaded.
 
     la_patches_for_class: list(ndarray)
@@ -773,24 +773,24 @@ def run2_train(sample_num = 2000, cluster_num = 200, test_size = 0.4, run_num = 
 
 
 def run2_test(neigh=None, ovr=None, order_of_classes=None,
-              test_folder='/Users/robin/COMP6223/cw3/testing', test_size=0.2,
+              test_folder='/Users/olivia/COMP6223/cw3/testing', test_size=0.2,
               run_num=10):
 
     if neigh is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'neigh.pkl')
+        path = join('/Users/olivia/COMP6223/cw3/', 'neigh.pkl')
         neigh = joblib.load(path)
     if ovr is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'ovr.pkl')
+        path = join('/Users/olivia/COMP6223/cw3/', 'ovr.pkl')
         ovr = joblib.load(path)
     if order_of_classes is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'order_of_classes.npy')
+        path = join('/Users/olivia/COMP6223/cw3/', 'order_of_classes.npy')
         order_of_classes = np.load(path)
 
     # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
     # To get the accuracy we need histograms and targets
 
-    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
-    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
+    # histograms = np.load(join('/Users/olivia/COMP6223/cw3/', 'histograms.npy'))
+    # targets = np.load(join('/Users/olivia/COMP6223/cw3/', 'targets.npy'))
     #
     # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
     #                                   test_size=test_size, run_num=run_num)
@@ -988,12 +988,12 @@ def get_daisy_descs_for_folder(folder, step , radius, rings, histograms,
 
 def get_daisy_descs_for_all_classes(step, radius, rings, histograms, orientations,
                                     visualize, normalization,
-                                    tr_folder = '/Users/robin/COMP6223/cw3/training'):
+                                    tr_folder = '/Users/olivia/COMP6223/cw3/training'):
     """Creates a matrix of all features for each class
 
     Parameters
     ----------
-    tr_folder: String (default: '/Users/robin/COMP6223/cw3/training')
+    tr_folder: String (default: '/Users/olivia/COMP6223/cw3/training')
         A filepath to the folder containing all the other class folders.
     step: int (default: 4)
         Distance between each sampling point
@@ -1117,20 +1117,20 @@ def run3_test(neigh=None, ovr=None, order_of_classes=None, step = 4, radius=15,
     """Runs the daisy descriptor run for all test images."""
 
     if neigh is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run3_neigh.pkl')
+        path = join('/Users/olivia/COMP6223/cw3/', 'run3_neigh.pkl')
         neigh = joblib.load(path)
     if ovr is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run3_ovr.pkl')
+        path = join('/Users/olivia/COMP6223/cw3/', 'run3_ovr.pkl')
         ovr = joblib.load(path)
     if order_of_classes is None:
-        path = join('/Users/robin/COMP6223/cw3/', 'run3_order_of_classes.npy')
+        path = join('/Users/olivia/COMP6223/cw3/', 'run3_order_of_classes.npy')
         order_of_classes = np.load(path)
 
     # THIS IS NOW DONE - DON'T NEED TO DO IT AGAIN
     # To get the accuracy we need histograms and targets
 
-    # histograms = np.load(join('/Users/robin/COMP6223/cw3/', 'histograms.npy'))
-    # targets = np.load(join('/Users/robin/COMP6223/cw3/', 'targets.npy'))
+    # histograms = np.load(join('/Users/olivia/COMP6223/cw3/', 'histograms.npy'))
+    # targets = np.load(join('/Users/olivia/COMP6223/cw3/', 'targets.npy'))
     #
     # ovr, acc_tr, acc_tst = one_vs_all(histograms, targets,
     #                                   test_size=test_size, run_num=run_num)
