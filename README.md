@@ -19,7 +19,7 @@ pip install tqdm
 Running im_recog.py
 ===========
 
-To run the function run_hybrid:
+To run the function im_recog:
 * Load your command prompt (cmd in Windows, terminal in Mac and Linux).
 * Change the directory to the one where im_recog.py is located.
 * Either make sure your images are also in this folder, or in the command
